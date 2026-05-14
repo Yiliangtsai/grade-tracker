@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>班級成績追蹤系統</title>
+
+<!-- Firebase SDK v10 -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<!-- SheetJS（Excel 匯入）-->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans TC',system-ui,sans-serif;background:#F5F0E8;min-height:100vh;font-size:14px;color:#1C1A14}
+.hidden{display:none!important}
+
+/* ═══════════════════════════════════════════════════════════
+   LOGIN PAGE  （與 index.html 原版同風格）
+═══════════════════════════════════════════════════════════ */
+.login-shell{display:flex;min-height:100vh}
+.login-left{
+  width:52%;background:#1C1A14;
+  display:flex;flex-direction:column;justify-content:space-between;
+  padding:2.8rem;overflow:hidden;position:relative;
+}
+.login-left::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(to bottom,rgba(20,17,10,.55) 0%,rgba(20,17,10,.45) 40%,rgba(20,17,10,.72) 75%,rgba(20,17,10,.88) 100%);
+  pointer-events:none;z-index:0;
+}
+.login-left>*{position:relative;z-index:1}
+.bg-deco{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-size:200px;font-weight:900;color:rgba(139,115,85,.04);
+  letter-spacing:-.02em;line-height:1;pointer-events:none;white-space:nowrap;z-index:0;user-select:none;
+}
+.login-right{width:48%;background:#F5F0E8;display:flex;flex-direction:column;justify-content:center;padding:2.8rem 3rem}
+@media(max-width:680px){.login-shell{flex-direction:column}.login-left,.login-right{width:100%;padding:1.5rem}}
+
+.masthead{border-bottom:3px solid rgba(200,160,80,.6);padding-bottom:1.2rem;margin-bottom:1.8rem}
+.masthead-date{font-size:12px;letter-spacing:.15em;color:#D4B878;text-transform:uppercase;margin-bottom:10px;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.masthead-name{font-size:13px;color:#F0D898;letter-spacing:.2em;text-transform:uppercase;margin-bottom:8px;font-weight:500;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.masthead-title{font-size:52px;font-weight:900;color:#F5F0E8;line-height:1.05;letter-spacing:-.02em;text-shadow:0 2px 14px rgba(0,0,0,.9)}
+.masthead-en{font-size:13px;color:#C8A850;letter-spacing:.25em;text-transform:uppercase;margin-top:10px;font-weight:400;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.masthead-sub{font-size:14px;color:#E8D098;letter-spacing:.08em;margin-top:8px;border-top:1px solid rgba(200,160,80,.5);padding-top:8px;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+
+.col-rule{display:flex;gap:12px;margin-bottom:1.4rem}
+.col{flex:1}
+.col-title{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#D4A840;border-top:1px solid rgba(200,160,80,.4);padding-top:8px;margin-bottom:8px;font-weight:600}
+.col-text{font-size:13px;color:#D8C898;line-height:1.7;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.col-hl{font-size:14px;color:#FFFFFF;font-weight:600;margin-bottom:4px;line-height:1.4;text-shadow:0 1px 8px rgba(0,0,0,.7)}
+.divider-h{height:1px;background:#3A3629;margin:1.2rem 0}
+.pull-quote{border-left:3px solid #8B7355;padding:10px 16px;margin:1.2rem 0;background:rgba(139,115,85,.08);border-radius:0 4px 4px 0}
+.pull-quote p{font-size:15px;color:#EED898;line-height:1.65;font-style:italic;letter-spacing:.01em;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+.tag-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem}
+.tag{font-size:11px;padding:4px 10px;border:1px solid rgba(200,160,60,.5);color:#D4A840;border-radius:2px;letter-spacing:.08em;text-transform:uppercase}
+.footer-tag{font-size:11px;letter-spacing:.12em;color:#A89060;text-transform:uppercase;border-top:1px solid #3A3629;padding-top:12px;margin-top:auto;display:flex;align-items:center;justify-content:space-between}
+.footer-issue{font-size:10px;color:#8B7040;letter-spacing:.08em}
+
+/* 右側登入框 */
+.login-right h2{font-size:26px;font-weight:700;color:#1C1A14;margin-bottom:6px;letter-spacing:-.01em}
+.login-right .sub{font-size:14px;color:#6B5F4A;margin-bottom:2rem;line-height:1.5}
+.byline{display:flex;align-items:center;gap:10px;margin-bottom:2rem}
+.byline-rule{flex:1;height:1px;background:#C8BA9E}
+.byline-text{font-size:16px;letter-spacing:.15em;text-transform:uppercase;color:#8B7355;white-space:nowrap;font-weight:500}
+.ornament{text-align:center;color:#8B7355;font-size:18px;letter-spacing:.4em;margin:1.2rem 0}
+.hint-box{margin-top:1.4rem;padding:14px;border:1px dashed #C8BA9E;border-radius:4px;background:#FAF7F0}
+.hint-box p{font-size:12px;color:#6B5F4A;line-height:2}
+.field{margin-bottom:1rem}
+.field label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#6B5F4A;margin-bottom:6px;font-weight:500}
+.field input{width:100%;padding:10px 14px;font-size:14px;border:1px solid #C8BA9E;border-radius:4px;background:#FAF7F0;color:#1C1A14;outline:none;font-family:inherit}
+.field input:focus{border-color:#8B7355;background:#fff}
+.err-msg{font-size:12px;color:#8B2222;background:#FFF0F0;border:1px solid #E8B8B8;border-radius:4px;padding:8px 12px;margin-bottom:1rem}
+.info-msg{font-size:12px;color:#5A6B2A;background:#F0F7E8;border:1px solid #B8D898;border-radius:4px;padding:8px 12px;margin-bottom:1rem}
+
+/* Login button */
+.btn-login{
+  width:100%;padding:12px;background:#1C1A14;color:#F5F0E8;font-size:14px;font-weight:600;
+  border:none;border-radius:4px;cursor:pointer;letter-spacing:.06em;font-family:inherit;
+  transition:background .15s;
+}
+.btn-login:hover{background:#3A3629}
+.btn-login:disabled{opacity:.5;cursor:not-allowed}
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN PAGE
+═══════════════════════════════════════════════════════════ */
+.header{
+  background:#1C1A14;color:#F5F0E8;
+  padding:0 24px;height:52px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.header-brand{display:flex;align-items:center;gap:10px}
+.header-title{font-size:15px;font-weight:700;letter-spacing:.02em}
+.header-sub{font-size:11px;color:#A89060;margin-left:8px}
+.header-actions{display:flex;gap:8px;align-items:center}
+.header-user{font-size:12px;color:#D4B878}
+
+.nav-bar{background:#F5F0E8;border-bottom:1px solid #C8BA9E;padding:0 24px;display:flex;gap:0;overflow-x:auto}
+.nav-tab{padding:10px 18px;font-size:13px;font-weight:500;color:#6B5F4A;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
+.nav-tab:hover{color:#1C1A14}
+.nav-tab.active{color:#1C1A14;border-bottom-color:#8B7355}
+
+.main{padding:24px;max-width:1200px;margin:0 auto}
+
+/* ── Buttons ── */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 14px;border-radius:6px;font-size:13px;font-weight:500;
+  cursor:pointer;border:1px solid #C8BA9E;background:#FAF7F0;color:#1C1A14;
+  transition:all .15s;font-family:inherit;white-space:nowrap;
+}
+.btn:hover{background:#F0EAE0}
+.btn-primary{background:#1C1A14;color:#F5F0E8;border-color:#1C1A14}
+.btn-primary:hover{background:#3A3629}
+.btn-success{background:#2E5A1A;color:#fff;border-color:#2E5A1A}
+.btn-success:hover{background:#244A14}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-danger{background:#FAF0F0;color:#8B2222;border-color:#E8B8B8}
+.btn-danger:hover{background:#F5D8D8}
+
+/* ── Cards ── */
+.card{background:#fff;border:1px solid #E0DAD0;border-radius:10px;padding:20px}
+.card-title{font-size:14px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.mb-16{margin-bottom:16px}
+.mb-12{margin-bottom:12px}
+.mt-16{margin-top:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:768px){.grid2,.grid4{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:1fr}}
+
+/* ── Stat cards ── */
+.stat-card{background:#FAF7F0;border:1px solid #E0DAD0;border-radius:8px;padding:14px 16px}
+.stat-label{font-size:11px;color:#8B7355;font-weight:500;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+.stat-value{font-size:24px;font-weight:700;font-family:'DM Mono',monospace}
+.stat-sub{font-size:11px;color:#9E9890;margin-top:2px}
+
+/* ── Section header ── */
+.section-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.section-title{font-size:16px;font-weight:700}
+.section-sub{font-size:12px;color:#8B7355;margin-top:2px}
+
+/* ── Table ── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#FAF7F0;padding:8px 10px;text-align:left;font-weight:600;font-size:11px;color:#6B5F4A;letter-spacing:.03em;border-bottom:1px solid #E0DAD0;white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid #EEE8E0}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#FAF7F0}
+.score-cell{text-align:center}
+.score-input{width:60px;text-align:center;padding:4px 6px;border:1px solid #C8BA9E;border-radius:6px;font-size:12px;font-family:'DM Mono',monospace;background:#FAF7F0;color:#1C1A14;outline:none}
+.score-input:focus{border-color:#8B7355;background:#fff}
+.score-high{color:#2E5A1A;font-weight:600}
+.score-low{color:#8B2222;font-weight:600}
+.mono{font-family:'DM Mono',monospace;font-size:12px}
+.muted{color:#9E9890}
+.bold{font-weight:600}
+.nowrap{white-space:nowrap}
+.row-actions{display:flex;gap:6px}
+
+/* ── Badges ── */
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500}
+.badge-green{background:#EDF4EA;color:#2E5A1A}
+.badge-amber{background:#FDF0E6;color:#8B4A14}
+.badge-red{background:#FAECEC;color:#8B2222}
+.badge-blue{background:#EAF1F8;color:#1C4A6B}
+
+/* ── Attention list ── */
+.attention-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #EEE8E0}
+.attention-item:last-child{border-bottom:none}
+.avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.attention-info{flex:1}
+.attention-name{font-weight:600;font-size:13px}
+.attention-sub{font-size:11px;color:#9E9890}
+
+/* ── Alert ── */
+.alert{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;border:1px solid}
+.alert-info{background:#EAF1F8;border-color:#B5D4F4;color:#1C4A6B}
+.alert-warn{background:#FDF0E6;border-color:#E8C49A;color:#8B4A14}
+
+/* ── Chart ── */
+.chart-box{position:relative}
+
+/* ── Empty state ── */
+.empty-state{text-align:center;padding:48px 20px;color:#9E9890}
+.empty-state.small{padding:20px}
+.empty-icon{font-size:36px;margin-bottom:12px}
+.empty-title{font-size:15px;font-weight:600;color:#6B5F4A;margin-bottom:6px}
+.empty-text{font-size:13px}
+
+/* ── Select / Input ── */
+select,input[type="text"],input[type="number"]{
+  border:1px solid #C8BA9E;border-radius:6px;padding:7px 10px;
+  font-size:13px;font-family:inherit;color:#1C1A14;background:#FAF7F0;
+  transition:border .15s;outline:none;
+}
+select:focus,input[type="text"]:focus,input[type="number"]:focus{border-color:#8B7355;background:#fff}
+label{font-size:12px;font-weight:500;color:#6B5F4A;display:block;margin-bottom:4px}
+input[type="checkbox"]{margin-right:4px}
+
+/* ── Analysis ── */
+.analysis-header{display:flex;align-items:center;gap:12px}
+.analysis-name{font-size:20px;font-weight:700}
+
+/* ── Report ── */
+.report-paper{background:#fff;border:1px solid #E0DAD0;border-radius:10px;padding:32px;max-width:800px;margin:0 auto}
+.report-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:16px;border-bottom:3px solid #1C1A14}
+.report-school{font-size:11px;font-weight:500;color:#8B7355;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.report-name{font-size:24px;font-weight:700}
+.report-meta{font-size:13px;color:#6B5F4A;margin-top:2px}
+.report-section{margin-bottom:20px}
+.report-exam-title{font-size:14px;font-weight:700;color:#1C4A6B;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid #E0DAD0}
+.report-table{width:100%;border-collapse:collapse;font-size:13px}
+.report-table th,.report-table td{padding:6px 10px;border:1px solid #E0DAD0}
+.report-table th{background:#FAF7F0;font-weight:600}
+.report-comment{margin-top:20px;padding-top:16px;border-top:1px solid #E0DAD0}
+.report-comment-title{font-size:13px;font-weight:600;margin-bottom:8px}
+.report-comment-box{border:1px solid #C8BA9E;border-radius:6px;min-height:80px;padding:10px;font-size:13px;color:#1C1A14;transition:border .15s}
+.report-comment-box:focus{border-color:#8B7355;background:#FDFBF7;box-shadow:0 0 0 3px rgba(139,115,85,.1)}
+.report-comment-box:empty:before{content:attr(data-placeholder);color:#C8BA9E;pointer-events:none}
+#student-memo-box:empty:before{content:attr(data-placeholder);color:#C8BA9E;pointer-events:none}
+@media print{.report-comment-box{border:1px solid #E0DAD0!important;box-shadow:none!important}}
+.report-sign{display:flex;justify-content:space-between;font-size:12px;color:#6B5F4A;margin-top:16px;gap:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Analysis redesign ── */
+.summary-box{background:linear-gradient(135deg,#1C3A5E 0%,#2D5F8A 100%);border-radius:var(--border-radius-lg,10px);padding:20px 24px;color:#fff;margin-bottom:16px}
+.summary-title{font-size:12px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:#B5D4F4;margin-bottom:8px}
+.summary-text{font-size:15px;line-height:1.8;color:#EAF1F8}
+.summary-text strong{color:#fff;font-weight:700}
+.summary-text .up{color:#7CDB8A}
+.summary-text .down{color:#F09090}
+.summary-text .warn{color:#FAC775}
+.exam-card{background:#fff;border:1px solid #E0DAD0;border-radius:10px;overflow:hidden;margin-bottom:10px;transition:box-shadow .15s}
+.exam-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.exam-card-header{display:flex;align-items:center;padding:14px 18px;cursor:pointer;gap:12px;user-select:none}
+.exam-card-header:hover{background:#FAF7F0}
+.exam-card-badge{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.exam-card-info{flex:1}
+.exam-card-name{font-size:13px;font-weight:600;color:#1C1A14}
+.exam-card-meta{font-size:11px;color:#9E9890;margin-top:2px}
+.exam-card-total{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:#1C1A14}
+.exam-card-avg{font-size:11px;color:#9E9890;text-align:right}
+.exam-card-arrow{font-size:12px;color:#C8BA9E;transition:transform .2s}
+.exam-card-arrow.open{transform:rotate(90deg)}
+.exam-card-body{display:none;padding:0 18px 16px;border-top:1px solid #F0EAE0}
+.exam-card-body.open{display:block}
+.subject-row{display:flex;align-items:center;gap:10px;padding:5px 0}
+.subject-name{width:56px;font-size:12px;color:#6B5F4A;flex-shrink:0}
+.subject-bar-wrap{flex:1;height:8px;background:#F0EAE0;border-radius:4px;overflow:hidden}
+.subject-bar-fill{height:100%;border-radius:4px;transition:width .4s}
+.subject-score{width:36px;text-align:right;font-size:12px;font-family:'DM Mono',monospace;font-weight:600}
+.subject-diff{width:40px;text-align:right;font-size:11px;font-weight:600}
+.subject-rank{width:36px;text-align:right;font-size:10px;color:#8B7355}
+.diff-up{color:#2E5A1A}
+.diff-down{color:#8B2222}
+.diff-same{color:#9E9890}
+.no-data-chip{display:inline-block;font-size:11px;color:#C8BA9E;background:#FAF7F0;border:1px dashed #E0DAD0;border-radius:6px;padding:3px 10px}
+
+/* ── Settings / HP editor ── */
+.hp-field{margin-bottom:10px}
+.hp-field label{font-size:11px;font-weight:500;color:#6B5F4A;margin-bottom:4px}
+.hp-field input[type="text"],.hp-field textarea{width:100%;padding:6px 8px;font-size:13px}
+.hp-field textarea{resize:vertical;min-height:60px}
+#hp-preview-bar{border-radius:8px;padding:16px;margin-bottom:12px}
+#prev-school{font-size:11px;letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;font-weight:500}
+#prev-title{font-size:28px;font-weight:900;line-height:1.1;margin-bottom:4px}
+#prev-en{font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:4px}
+#prev-sub{font-size:12px}
+#prev-quote{font-size:12px;font-style:italic;margin-top:8px;opacity:.8}
+
+/* ── Modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.modal{background:#fff;border-radius:10px;padding:24px;width:100%;max-width:460px;border:1px solid #E0DAD0}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:18px}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;border-top:1px solid #E0DAD0;padding-top:14px}
+.modal-close{position:absolute;top:12px;right:12px;background:none;border:none;font-size:18px;cursor:pointer;color:#6B5F4A}
+
+/* ── Confirm modal ── */
+.confirm-modal{background:#fff;border-radius:10px;padding:24px;max-width:360px;width:100%;text-align:center;border:1px solid #E0DAD0}
+.confirm-modal h3{font-size:16px;font-weight:700;margin-bottom:8px}
+.confirm-modal p{font-size:13px;color:#6B5F4A;margin-bottom:16px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:20px;right:24px;background:#1C1A14;color:#F5F0E8;font-size:13px;padding:10px 18px;border-radius:8px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9999;max-width:320px}
+.toast.show{opacity:1}
+
+/* ── Print ── */
+@page {
+  size: A4 portrait;
+  margin: 10mm 10mm 14mm 10mm;
+}
+@page :first { }
+@media print{
+  /* 頁碼 */
+  .an-print-page::after, .report-paper::after {
+    content: "第 " counter(page) " 頁";
+    display: block;
+    text-align: right;
+    font-size: 8pt;
+    color: #9E9890;
+    margin-top: 6mm;
+    padding-top: 4px;
+    border-top: 1px solid #E0DAD0;
+  }
+  .header,.nav-bar,.no-print,#page-overview,#page-students,#page-input,#page-settings,#page-summary{display:none!important}
+  /* 報告列印模式 */
+  body:not(.print-analysis):not(.print-analysis-batch) #page-analysis{display:none!important}
+  body:not(.print-analysis):not(.print-analysis-batch) #page-report{display:block!important}
+  /* 個人分析列印模式：直接印 analysis-content（含 canvas 圖表） */
+  body.print-analysis #page-report{display:none!important}
+  body.print-analysis #page-analysis{display:block!important}
+  body.print-analysis #pc-an-wrap .section-header{display:none!important}
+  body.print-analysis #m-an-sel{display:none!important}
+  body.print-analysis #analysis-print-wrap{display:none!important}
+  body.print-analysis .card{page-break-inside:avoid}
+  body.print-analysis .grid2{display:grid!important;grid-template-columns:1fr 1fr!important}
+  /* 全班批次列印模式：analysis-print-wrap 裡是完整的 analysis-content clones */
+  body.print-analysis-batch #page-report{display:none!important}
+  body.print-analysis-batch #page-analysis{display:block!important}
+  body.print-analysis-batch #pc-an-wrap{display:none!important}
+  body.print-analysis-batch #analysis-print-wrap{display:block!important}
+  body.print-analysis-batch #analysis-print-wrap .card{page-break-inside:avoid}
+  body.print-analysis-batch #analysis-print-wrap .grid2{display:grid!important;grid-template-columns:1fr 1fr!important}
+  body.print-analysis-batch #analysis-print-wrap .summary-box{page-break-inside:avoid}
+  body.print-analysis-batch #analysis-print-wrap .section-header{display:none!important}
+  .main{padding:0;max-width:100%}
+  .report-paper{border:none;padding:0;page-break-after:always}
+  .report-paper:last-child{page-break-after:avoid}
+  .an-print-page{page-break-after:always}
+  .an-print-page:last-child{page-break-after:avoid}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  .report-section{page-break-inside:avoid}
+  .report-table tr{page-break-inside:avoid}
+  .m-nav,.toast{display:none!important}
+}
+
+/* ── Student list sparkline & tags ── */
+.rank-chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 7px;border-radius:6px}
+.rank-chip.up{color:#2E5A1A;background:#EDF4EA}
+.rank-chip.down{color:#8B2222;background:#FAECEC}
+.stag{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;margin-right:3px;white-space:nowrap}
+.stag-red{background:#FAECEC;color:#8B2222}
+.stag-amber{background:#FDF0E6;color:#8B4A14}
+.stag-green{background:#EDF4EA;color:#2E5A1A}
+
+/* ── Student name link ── */
+.student-link{color:#2D5F8A;text-decoration:underline dotted;cursor:pointer}
+.student-link:hover{color:#1C3A5E}
+
+/* ── Input table foot avg row ── */
+tfoot td{padding:8px 10px;font-size:12px}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#C8BA9E;border-radius:3px}
+
+/* ═══════════════════════════════════════════════════
+   MOBILE DESIGN SYSTEM
+═══════════════════════════════════════════════════ */
+
+/* 手機版元件 */
+.m-hero{background:#1C1A14;color:#F5F0E8;border-radius:16px;padding:20px;margin-bottom:12px}
+.m-hero-lbl{font-size:11px;color:#A89060;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.m-hero-val{font-size:38px;font-weight:900;font-family:'DM Mono',monospace;line-height:1}
+.m-hero-sub{font-size:12px;color:#A89060;margin-top:6px}
+.m-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.m-box{background:#fff;border:1px solid #E0DAD0;border-radius:12px;padding:12px 10px;text-align:center}
+.m-box .mv{font-size:20px;font-weight:700;font-family:'DM Mono',monospace}
+.m-box .ml{font-size:10px;color:#9E9890;margin-top:2px}
+.m-sec{font-size:11px;font-weight:600;color:#8B7355;letter-spacing:.08em;text-transform:uppercase;margin:14px 0 8px;padding-left:2px}
+.m-sub-card{background:#fff;border:1px solid #E0DAD0;border-radius:12px;padding:14px 16px;margin-bottom:8px}
+.m-sub-name{font-size:13px;font-weight:600;color:#1C1A14;margin-bottom:8px}
+.m-bar-row{display:flex;align-items:center;gap:8px}
+.m-bar{flex:1;height:10px;background:#F0EAE0;border-radius:5px;overflow:hidden}
+.m-bar-fill{height:100%;border-radius:5px;transition:width .4s}
+.m-bar-score{font-size:17px;font-weight:700;font-family:'DM Mono',monospace;min-width:36px;text-align:right}
+.m-bar-meta{display:flex;justify-content:space-between;margin-top:5px;font-size:11px;color:#9E9890}
+.m-stu-card{background:#fff;border:1px solid #E0DAD0;border-radius:12px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.m-stu-card:active{background:#FAF7F0}
+.m-stu-av{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;flex-shrink:0}
+.m-stu-info{flex:1;min-width:0}
+.m-stu-name{font-size:15px;font-weight:600;color:#1C1A14;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-stu-meta{font-size:11px;color:#9E9890;margin-top:2px}
+.m-stu-right{text-align:right;flex-shrink:0}
+.m-stu-total{font-size:19px;font-weight:700;font-family:'DM Mono',monospace}
+.m-stu-diff{font-size:11px;margin-top:2px}
+.m-pill{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px}
+.m-pill-r{background:#FAECEC;color:#8B2222}
+.m-pill-g{background:#EDF4EA;color:#2E5A1A}
+.m-pill-a{background:#FDF0E6;color:#8B4A14}
+.m-chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.m-chips::-webkit-scrollbar{display:none}
+.m-chip{flex-shrink:0;padding:9px 16px;border-radius:99px;border:1px solid #C8BA9E;background:#fff;font-size:13px;font-weight:500;color:#6B5F4A;cursor:pointer;white-space:nowrap;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.m-chip.active{background:#1C1A14;color:#F5F0E8;border-color:#1C1A14}
+.m-analysis-top{background:#1C1A14;color:#F5F0E8;border-radius:16px;padding:16px 18px;margin-bottom:12px}
+.m-analysis-name{font-size:22px;font-weight:700;margin-bottom:4px}
+.m-analysis-meta{font-size:12px;color:#A89060}
+.m-summary{background:linear-gradient(135deg,#1C3A5E,#2D5F8A);border-radius:12px;padding:14px 16px;color:#EAF1F8;margin-bottom:12px;font-size:13px;line-height:1.9}
+.m-summary strong{color:#fff;font-weight:700}
+.m-summary .up{color:#7CDB8A}
+.m-summary .down{color:#F09090}
+.m-summary .warn{color:#FAC775}
+
+/* 底部導覽列 */
+.m-nav{display:none;position:fixed;bottom:0;left:0;right:0;width:100%;background:#1C1A14;border-top:1px solid #3A3629;padding:0 0 env(safe-area-inset-bottom);z-index:200;box-sizing:border-box}
+.m-nav-inner{display:flex;align-items:stretch;width:100%}
+.m-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0;min-height:56px;border:none;background:transparent;color:#A89060;font-family:inherit;font-size:9px;font-weight:500;letter-spacing:.03em;gap:3px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color .15s}
+.m-nav-btn .ico{font-size:21px;line-height:1;display:block;text-align:center}
+.m-nav-btn.active{color:#C8A850}
+.m-nav-btn:active{background:rgba(255,255,255,.06)}
+
+/* header 手機版精簡 */
+.header-btn-group{display:flex;gap:6px}
+
+/* RWD */
+@media(max-width:768px){
+  .m-nav{display:flex}
+  #main-page{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  .header{padding:0 12px;height:48px}
+  .header-title{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+  .header-sub{display:none}
+  .nav-bar{display:none}
+  /* header 按鈕：只保留登出，其他藏進選單 */
+  .header-actions .btn-sm:not(.m-always-show){display:none}
+  .header-user{display:none}
+  .main{padding:12px}
+  .grid2,.grid3,.grid4{grid-template-columns:1fr}
+  .card{padding:14px;border-radius:12px}
+  .section-header{flex-direction:column;gap:8px;align-items:flex-start}
+  select{width:100%!important;padding:10px 12px;font-size:14px;border-radius:8px}
+  .stat-value{font-size:20px}
+  .toast{bottom:calc(72px + env(safe-area-inset-bottom));right:10px;left:10px;max-width:100%;text-align:center}
+  .modal{max-width:100%;margin:0;border-radius:20px 20px 0 0;position:fixed;bottom:0;left:0;right:0;max-height:88vh;overflow-y:auto}
+  .modal-bg{align-items:flex-end;padding:0}
+  .login-left .col-rule,.login-left .divider-h,.login-left .pull-quote,.login-left .tag-row,.login-left .footer-tag{display:none}
+  .login-left{padding:1.6rem 1.4rem 1rem;min-height:auto}
+  .masthead-title{font-size:32px}
+  .masthead{margin-bottom:.6rem;padding-bottom:.6rem}
+}
+@media(min-width:769px){
+  .m-nav{display:none!important}
+  [id^="m-page-"]{display:none!important}
+}
+@supports(padding:max(0px)){
+  .header{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+}
+@media(max-width:768px){.pc-only{display:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════
+     LOGIN PAGE
+════════════════════════════════════════════════════════ -->
+<div id="login-page">
+  <div class="login-shell">
+    <!-- 左側 -->
+    <div class="login-left">
+      <span class="bg-deco">成績</span>
+
+      <div>
+        <div class="masthead">
+          <div class="masthead-date" id="today-date"></div>
+          <div class="masthead-name">桃園市立石門國民中學 · 113級3班</div>
+          <div class="masthead-title">班級成績<br>追蹤系統</div>
+          <div class="masthead-en">Class Grade Tracking System</div>
+          <div class="masthead-sub">113級 · 段考成績記錄與學習分析</div>
+        </div>
+
+        <div class="col-rule">
+          <div class="col">
+            <div class="col-title">系統說明</div>
+            <div class="col-hl">雲端同步 · 即時分析</div>
+            <div class="col-text">本系統專供導師記錄全班各次段考成績，支援個人學習曲線與班排校排追蹤，以及一鍵產出學生報告。</div>
+          </div>
+          <div class="col">
+            <div class="col-title">功能一覽</div>
+            <div class="col-text">
+              📊 班級總覽與統計<br>
+              📈 個人學習曲線<br>
+              🏅 班排 / 校排追蹤<br>
+              🖨 一鍵產出報告
+            </div>
+          </div>
+        </div>
+
+        <div class="divider-h"></div>
+        <div class="pull-quote">
+          <p>「成績是學習的里程碑，每一次進步都值得被看見。」</p>
+        </div>
+        <div class="tag-row">
+          <span class="tag">113級3班</span>
+          <span class="tag">段考成績</span>
+          <span class="tag">學習分析</span>
+          <span class="tag">導師專用</span>
+        </div>
+      </div>
+
+      <div class="footer-tag">
+        <span>桃園市立石門國民中學 113級3班 成績追蹤系統</span>
+        <span class="footer-issue">113學年度 · 2025–2026</span>
+      </div>
+    </div>
+
+    <!-- 右側 -->
+    <div class="login-right">
+      <h2>導師登入</h2>
+      <p class="sub">本系統僅供班級導師使用<br>請輸入您的校務系統帳號密碼</p>
+
+      <div class="byline">
+        <div class="byline-rule"></div>
+        <div class="byline-text">Sign In</div>
+        <div class="byline-rule"></div>
+      </div>
+
+      <div id="lerr" class="err-msg hidden"></div>
+      <div id="linfo" class="info-msg hidden"></div>
+
+      <div class="field">
+        <label>帳號（@ 前的部分）</label>
+        <input type="text" id="lacc" placeholder="例：ta212" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>密碼</label>
+        <input type="password" id="lpw" placeholder="請輸入密碼" autocomplete="current-password">
+      </div>
+      <button class="btn-login" id="login-btn" onclick="doLogin()">登入系統</button>
+
+      <div class="ornament">· · ·</div>
+
+      <div class="hint-box">
+        <p>
+          🔐 帳號格式：ta開頭的學校帳號<br>
+          🏫 本系統使用與段考試卷系統相同的 Firebase 帳號<br>
+          📚 僅限導師帳號（ta212）登入使用
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     MAIN PAGE
+════════════════════════════════════════════════════════ -->
+<div id="main-page" class="hidden">
+
+  <!-- Loading Overlay -->
+  <div id="app-loading" style="display:none;position:fixed;inset:0;background:rgba(28,26,20,.55);backdrop-filter:blur(3px);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+    <div style="width:48px;height:48px;border:4px solid #F5F0E8;border-top-color:#C8A850;border-radius:50%;animation:spin .8s linear infinite"></div>
+    <div style="color:#F5F0E8;font-size:15px;font-weight:600;font-family:'Noto Sans TC',sans-serif">資料載入中...</div>
+  </div>
+
+  <!-- HEADER -->
+  <div class="header no-print">
+    <div class="header-brand">
+      <span style="font-size:18px">📚</span>
+      <span class="header-title" id="header-title">班級成績追蹤系統</span>
+      <span class="header-sub" id="student-count-header">共 0 位學生</span>
+    </div>
+    <div class="header-actions">
+    <div id="admin-class-switcher" style="display:none;align-items:center;gap:8px;margin-right:12px"></div>      
+    <span class="header-user" id="user-name"></span>
+      <!-- 桌機版按鈕 -->
+      <button class="btn btn-sm pc-only" onclick="exportData()">⬇ 備份</button>
+      <button class="btn btn-sm pc-only" onclick="exportExcel()">📤 匯出成績單</button>
+      <button class="btn btn-sm btn-primary pc-only" onclick="document.getElementById('excel-file').click()">📊 匯入 Excel</button>
+      <button class="btn btn-sm pc-only" onclick="downloadSampleExcel()" title="下載匯入範例檔">📋 範例檔</button>
+      <button class="btn btn-sm pc-only" onclick="document.getElementById('import-file').click()">⬆ 還原備份</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+      <input type="file" id="excel-file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(event)">
+      <!-- 手機版只顯示登出 -->
+      <button class="btn btn-sm btn-danger" onclick="confirmLogout()">登出</button>
+    </div>
+  </div>
+
+  <!-- NAV TABS -->
+  <div class="nav-bar no-print">
+    <div class="nav-tab active" id="tab-overview"  onclick="switchPage('overview')">📊 班級總覽</div>
+    <div class="nav-tab"        id="tab-students"  onclick="switchPage('students')">👤 學生名單</div>
+    <div class="nav-tab"        id="tab-input"     onclick="switchPage('input')">✏️ 輸入成績</div>
+    <div class="nav-tab"        id="tab-analysis"  onclick="switchPage('analysis')">📈 個人分析</div>
+    <div class="nav-tab"        id="tab-report"    onclick="switchPage('report')">🖨 產出報告</div>
+    <div class="nav-tab"        id="tab-summary"   onclick="switchPage('summary')">🗺 全程總結</div>
+    <div class="nav-tab"        id="tab-alert-settings" onclick="switchPage('alert-settings')">🔔 預警設定</div>
+    <div class="nav-tab"        id="tab-settings"  onclick="switchPage('settings')">⚙️ 外觀設定</div>
+  </div>
+
+  <div class="main">
+
+    <!-- ── 班級總覽 ── -->
+    <div id="page-overview">
+      <!-- 手機版選單 -->
+      <div id="m-ov-sel" style="display:none;margin-bottom:12px">
+        <div style="display:flex;gap:8px">
+          <select id="m-overview-sem" onchange="onMobileOverviewSemChange()" style="flex:1;padding:10px;font-size:14px;border-radius:10px">
+            <option value="7上">7上</option><option value="7下">7下</option>
+            <option value="8上">8上</option><option value="8下">8下</option>
+            <option value="9上">9上</option><option value="9下">9下</option>
+            <optgroup label="── 年級總結 ──">
+              <option value="grade7">7年級總結</option>
+              <option value="grade8">8年級總結</option>
+              <option value="grade9">9年級總結</option>
+              <option value="gradeAll">全部總結</option>
+            </optgroup>
+          </select>
+          <select id="m-overview-exam" onchange="renderMobileOverview(this.value)" style="flex:1;padding:10px;font-size:14px;border-radius:10px"></select>
+        </div>
+      </div>
+      <!-- 手機版內容 -->
+      <div id="m-ov-wrap" style="display:none"></div>
+      <!-- 桌機版 -->
+      <div id="pc-ov-wrap">
+      <div class="section-header mb-16">
+        <div>
+          <div class="section-title">班級總覽</div>
+          <div class="section-sub">查看全班各次段考表現概況</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="overview-sem" onchange="onOverviewSemChange()" style="width:130px">
+            <option value="7上">7上</option><option value="7下">7下</option>
+            <option value="8上">8上</option><option value="8下">8下</option>
+            <option value="9上">9上</option><option value="9下">9下</option>
+            <optgroup label="── 年級總結 ──">
+              <option value="grade7">7年級總結</option>
+              <option value="grade8">8年級總結</option>
+              <option value="grade9">9年級總結</option>
+              <option value="gradeAll">全部總結</option>
+            </optgroup>
+          </select>
+          <select id="overview-exam" onchange="renderOverview()" style="width:130px"></select>
+        </div>
+      </div>
+      <div class="grid4 mb-16" id="overview-stats"></div>
+      <div class="card mb-16">
+        <div class="card-title">📋 各科及格率 &amp; 標準差</div>
+        <div id="subject-stats-wrap"></div>
+      </div>
+      <div class="grid2 mb-16">
+        <div class="card">
+          <div class="card-title">📈 各科班平均趨勢</div>
+          <div class="chart-box" style="height:260px"><canvas id="chart-avg-trend"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📊 本次段考各科平均</div>
+          <div class="chart-box" style="height:260px"><canvas id="chart-subject-avg"></canvas></div>
+        </div>
+      </div>
+      <div class="card mb-16">
+        <div class="card-title">📉 成績分布（總分區間人數）</div>
+        <div class="chart-box" style="height:180px"><canvas id="chart-dist"></canvas></div>
+      </div>
+      <div class="grid2 mb-16">
+        <div class="card">
+          <div class="card-title">🏫 全班校排分布</div>
+          <div id="school-rank-dist-wrap"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">⚡ 班內強但校內弱的學生</div>
+          <div id="class-strong-school-weak-wrap"></div>
+        </div>
+      </div>
+      <div class="card mb-16">
+        <div class="card-title">🎯 班級弱科即時提醒
+          <span style="font-size:11px;font-weight:400;color:#9E9890;margin-left:8px">及格率低於 70% 或班平均低於 65 分的科目</span>
+        </div>
+        <div id="class-weak-wrap"></div>
+      </div>
+      <div class="grid2 mb-16">
+        <div class="card">
+          <div class="card-title">⚠️ 需關注名單</div>
+          <div id="attention-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🌟 進步最多名單</div>
+          <div id="progress-list"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📐 各科班平均進退步（與上次段考相比）</div>
+        <div id="subject-progress-wrap"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🟥 全班成績熱力圖<span style="font-size:11px;font-weight:400;color:#9E9890;margin-left:8px">依總分排序，顏色代表分數高低</span></div>
+        <div id="heatmap-wrap"></div>
+      </div>
+      <div class="grid2 mb-16">
+        <div class="card">
+          <div class="card-title">💪 班級健康指數<span style="font-size:11px;font-weight:400;color:#9E9890;margin-left:8px">綜合平均、及格率、趨勢、集中度</span></div>
+          <div id="health-index-wrap"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔮 下次段考成績預測<span style="font-size:11px;font-weight:400;color:#9E9890;margin-left:8px">線性回歸估算，僅供參考</span></div>
+          <div id="prediction-wrap"></div>
+        </div>
+      </div>
+      </div><!-- /pc-ov-wrap -->
+    </div>
+
+    <!-- ── 學生名單 ── -->
+    <div id="page-students" class="hidden">
+      <div class="section-header mb-16">
+        <div>
+          <div class="section-title">學生名單管理</div>
+          <div class="section-sub">新增、編輯或刪除學生資料</div>
+        </div>
+        <button class="btn btn-primary" onclick="openAddStudent()">＋ 新增學生</button>
+      </div>
+      <div class="card mb-16" style="padding:10px 14px">
+        <input type="text" id="student-search" placeholder="🔍 搜尋學生姓名或座號..." style="width:100%;border:none;outline:none;font-size:14px;background:transparent" oninput="filterStudentList(this.value)">
+      </div>
+      <!-- 手機版 -->
+      <div id="m-st-wrap" style="display:none"></div>
+      <!-- 桌機版 -->
+      <div id="pc-st-wrap">
+        <div class="card"><div id="student-list-table"></div></div>
+      </div>
+    </div>
+
+    <!-- ── 輸入成績 ── -->
+    <div id="page-input" class="hidden">
+      <div class="section-header mb-16">
+        <div>
+          <div class="section-title">輸入成績</div>
+          <div class="section-sub">為各次段考輸入學生成績、班排與校排</div>
+        </div>
+      </div>
+      <!-- 手機提示 -->
+      <div id="mobile-input-warn" style="display:none;background:#FDF0E6;border:1px solid #F0C090;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#8B4513">
+        📱 成績輸入建議使用桌機或平板操作，手機螢幕較小可能不便。目前仍可使用，鍵盤導航：<strong>Tab/Enter</strong> 換欄、<strong>↑↓</strong> 換人。
+      </div>
+      <div class="card mb-16">
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+          <div>
+            <label>學期</label>
+            <select id="input-sem" onchange="onInputSemChange()" style="width:90px">
+              <option value="7上">7上</option><option value="7下">7下</option>
+              <option value="8上">8上</option><option value="8下">8下</option>
+              <option value="9上">9上</option><option value="9下">9下</option>
+            </select>
+          </div>
+          <div>
+            <label>段考</label>
+            <select id="input-exam" onchange="renderInputTable()" style="width:130px"></select>
+          </div>
+          <button class="btn btn-success" id="save-scores-btn" onclick="saveAllScores()">💾 儲存所有成績</button>
+          <div id="unsaved-warn" style="display:none;align-items:center;gap:6px;font-size:12px;color:#C4651A;font-weight:600;background:#FDF0E6;border:1px solid #F0C090;border-radius:6px;padding:4px 10px">
+            ⚠️ 有未儲存的成績
+          </div>
+          <button class="btn btn-danger btn-sm" id="clear-school-rank-btn" onclick="clearAllSchoolRanks()" style="margin-left:auto">🗑️ 清除全班校排資料</button>
+          <button class="btn btn-danger btn-sm" id="clear-all-data-btn" onclick="clearAllData()" style="background:#B71C1C;border-color:#B71C1C;color:#FFFFFF;font-weight:700">⚠️ 清除所有成績資料</button>
+        </div>
+        <div id="input-table-wrap"></div>
+      </div>
+    </div>
+
+    <!-- ── 個人分析 ── -->
+    <div id="page-analysis" class="hidden">
+      <!-- 手機版選單 -->
+      <div id="m-an-sel" style="display:none;margin-bottom:12px">
+        <select id="m-an-student" onchange="onMobileAnStudentChange()" style="width:100%;margin-bottom:8px;padding:12px;font-size:15px;border-radius:10px">
+          <option value="">— 選擇學生 —</option>
+        </select>
+        <select id="m-an-sem" onchange="renderMobileAnalysis()" style="width:100%;padding:12px;font-size:15px;border-radius:10px">
+          <option value="7上">7上</option><option value="7下">7下</option>
+          <option value="8上">8上</option><option value="8下">8下</option>
+          <option value="9上">9上</option><option value="9下">9下</option>
+          <optgroup label="── 年級總結 ──">
+            <option value="grade7">7年級總結</option>
+            <option value="grade8">8年級總結</option>
+            <option value="grade9">9年級總結</option>
+            <option value="gradeAll">全部總結</option>
+          </optgroup>
+        </select>
+      </div>
+      <!-- 手機版內容 -->
+      <div id="m-an-wrap" style="display:none"></div>
+      <!-- 桌機版 -->
+      <div id="pc-an-wrap">
+      <div class="section-header mb-16">
+        <div>
+          <div class="section-title">個人學習分析</div>
+          <div class="section-sub">選擇學生與學期，深入了解學習狀況</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="analysis-student" onchange="onAnalysisStudentChange()" style="width:160px">
+            <option value="">— 選擇學生 —</option>
+          </select>
+          <select id="analysis-sem" onchange="onAnalysisSemChange()" style="width:120px">
+            <option value="7上">7上</option><option value="7下">7下</option>
+            <option value="8上">8上</option><option value="8下">8下</option>
+            <option value="9上">9上</option><option value="9下">9下</option>
+            <optgroup label="── 年級總結 ──">
+              <option value="grade7">7年級總結</option>
+              <option value="grade8">8年級總結</option>
+              <option value="grade9">9年級總結</option>
+              <option value="gradeAll">全部總結</option>
+            </optgroup>
+          </select>
+          <button class="btn no-print" onclick="printAnalysis()" title="列印目前學生的分析內容">🖨 列印個人分析</button>
+          <button class="btn no-print" onclick="batchPrintAnalysis()" title="逐頁列印全班每位學生的分析摘要">🖨 全班批次列印</button>
+        </div>
+      </div>
+      <div id="analysis-content">
+        <div class="empty-state">
+          <div class="empty-icon">👤</div>
+          <div class="empty-title">請先選擇學生</div>
+          <div class="empty-text">從上方選擇學生與學期後開始分析</div>
+        </div>
+      </div>
+      </div><!-- /pc-an-wrap -->
+    </div>
+
+    <!-- 分析列印容器（隱藏，僅列印時顯示） -->
+    <div id="analysis-print-wrap" style="display:none"></div>
+    <div id="page-report" class="hidden">
+      <div class="section-header mb-16 no-print">
+        <div>
+          <div class="section-title">產出學生報告</div>
+          <div class="section-sub">列印個人成績報告卡</div>
+        </div>
+      </div>
+      <div class="card mb-16 no-print">
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <label>選擇學生</label>
+            <select id="report-student" onchange="onReportStudentChange()" style="width:180px">
+              <option value="">— 選擇學生 —</option>
+            </select>
+          </div>
+          <div>
+            <label>學期篩選</label>
+            <select id="report-sem" onchange="onReportSemChange()" style="width:90px">
+              <option value="">全部</option>
+              <option value="7上">7上</option><option value="7下">7下</option>
+              <option value="8上">8上</option><option value="8下">8下</option>
+              <option value="9上">9上</option><option value="9下">9下</option>
+            </select>
+          </div>
+          <div>
+            <label>段考</label>
+            <select id="report-exam" onchange="renderReport()" style="width:150px">
+              <option value="">全部段考</option>
+            </select>
+          </div>
+          <div style="padding-bottom:2px">
+            <label><input type="checkbox" id="report-hide-rank" onchange="renderReport()"> 隱藏排名（家長版）</label>
+          </div>
+          <div style="padding-bottom:2px">
+            <label><input type="checkbox" id="report-semester-summary" onchange="renderReport()"> 學期綜合報告模式</label>
+          </div>
+          <button class="btn btn-primary" onclick="printReport()">🖨 列印此份</button>
+          <button class="btn btn-success" onclick="batchPrintAll()">🖨 全班批次列印</button>
+        </div>
+      </div>
+      <div id="report-content">
+        <div class="empty-state">
+          <div class="empty-icon">📄</div>
+          <div class="empty-title">請選擇學生以產出報告</div>
+        </div>
+      </div>
+      <!-- 家長通知單 -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">📄 家長通知單<span style="font-size:11px;font-weight:400;color:#9E9890;margin-left:8px">精簡版，供家長簽名回條</span></div>
+        <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
+          <select id="parent-notice-student" onchange="S.reportStudentId=this.value;renderParentNotice()" style="width:200px">
+            <option value="">— 選擇學生 —</option>
+          </select>
+          <button class="btn btn-primary" onclick="printParentNotice()">🖨 列印通知單</button>
+        </div>
+        <div id="parent-notice-wrap"></div>
+      </div>
+    </div>
+
+    <!-- ── 全程總結 ── -->
+    <div id="page-summary" class="hidden">
+      <div class="section-header mb-16">
+        <div>
+          <div class="section-title">全學期趨勢總結</div>
+          <div class="section-sub">從 7上 到 9下 的完整學習歷程分析</div>
+        </div>
+        <select id="summary-exam" onchange="renderCorrelation()" style="width:180px">
+          <option value="">— 選擇段考（相關性）—</option>
+        </select>
+      </div>
+
+      <!-- 全學期折線圖 -->
+      <div class="card mb-16">
+        <div class="card-title">📈 全學期班級總分走勢</div>
+        <div class="chart-box" style="height:260px"><canvas id="chart-all-sem-trend"></canvas></div>
+      </div>
+      <div class="card mb-16">
+        <div class="card-title">🏫 全學期班級平均校排走勢<span style="font-size:11px;font-weight:400;color:#9E9890;margin-left:8px">名次越小越好</span></div>
+        <div class="chart-box" style="height:220px"><canvas id="chart-school-rank-trend"></canvas></div>
+      </div>
+
+      <!-- 成長排行榜 -->
+      <div class="card mb-16">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>🏆 成長排行榜</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;color:#6B5F4A">時間範圍：</label>
+            <select id="growth-period-sel" onchange="renderGrowthRanking()" style="font-size:12px;padding:4px 8px;border:1px solid #C8BA9E;border-radius:6px">
+              <option value="all">全程</option>
+              <option value="recent2">最近 2 次</option>
+              <option value="recent3">最近 3 次</option>
+              <option value="7上">7上學期</option>
+              <option value="7下">7下學期</option>
+              <option value="8上">8上學期</option>
+              <option value="8下">8下學期</option>
+              <option value="9上">9上學期</option>
+              <option value="9下">9下學期</option>
+            </select>
+          </div>
+        </div>
+        <div id="growth-ranking-wrap"></div>
+      </div>
+
+      <!-- 各科長期趨勢 + 學生分組 -->
+      <div class="grid2 mb-16">
+        <div class="card">
+          <div class="card-title">📐 各科跨學期班平均趨勢</div>
+          <div class="chart-box" style="height:240px"><canvas id="chart-subject-long"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">👥 學生分組分析<span style="font-size:11px;font-weight:400;color:#9E9890;margin-left:6px">依最新總分分前/中/後段</span></div>
+          <div id="group-stats-wrap"></div>
+          <div class="chart-box" style="height:180px"><canvas id="chart-group-trend"></canvas></div>
+        </div>
+      </div>
+
+      <!-- 里程碑 + 相關性 -->
+      <div class="grid2 mb-16">
+        <div class="card">
+          <div class="card-title">🏁 學期里程碑</div>
+          <div id="milestones-wrap"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔗 科目相關性分析</div>
+          <div id="correlation-wrap"><div style="font-size:12px;color:#9E9890;padding:8px">請從右上角選擇段考</div></div>
+        </div>
+      </div>
+
+      <!-- 各學期摘要表 -->
+      <div class="card mb-16">
+        <div class="card-title">📊 各學期班級成績摘要</div>
+        <div id="semester-summary-table"></div>
+      </div>
+
+      <!-- 導師筆記 -->
+      <div class="card">
+        <div class="card-title">📝 導師學期筆記<span style="font-size:11px;font-weight:400;color:#9E9890;margin-left:8px">記錄每學期的觀察與備注，與趨勢圖對照</span></div>
+        <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+          <div>
+            <label>學期</label>
+            <select id="note-sem-sel" onchange="loadNotes()" style="width:100px"></select>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <label>筆記內容</label>
+            <textarea id="note-textarea" style="width:100%;height:80px;padding:8px;font-size:13px;font-family:inherit;border:1px solid #C8BA9E;border-radius:8px;resize:vertical;background:#FAF7F0;outline:none" placeholder="例：本學期換了數學老師，班級段考前氣氛較浮躁..."></textarea>
+          </div>
+          <div style="display:flex;align-items:flex-end">
+            <button class="btn btn-primary" id="save-note-btn" onclick="saveNote()">💾 儲存筆記</button>
+          </div>
+        </div>
+        <div style="font-size:12px;font-weight:600;color:#6B5F4A;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #E0DAD0">已儲存的筆記</div>
+        <div id="notes-list-wrap"></div>
+      </div>
+    </div>
+
+    <!-- ── 預警設定 ── -->
+    <div id="page-alert-settings" class="hidden">
+      <div class="section-header mb-16">
+        <div><div class="section-title">⚠️ 預警門檻設定</div>
+          <div class="section-sub">自訂需要關注的學生條件</div></div>
+      </div>
+      <div class="card mb-16">
+        <div class="card-title">🔔 關注條件設定</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+          <div>
+            <label style="font-size:12px;color:#6B5F4A;display:block;margin-bottom:6px">單科低於幾分</label>
+            <input type="number" id="alert-score-threshold" min="0" max="100" value="60" style="width:100%;padding:10px;border:1px solid #C8BA9E;border-radius:8px;font-size:14px">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#6B5F4A;display:block;margin-bottom:6px">連續幾次低於門檻</label>
+            <input type="number" id="alert-consecutive-count" min="1" max="10" value="2" style="width:100%;padding:10px;border:1px solid #C8BA9E;border-radius:8px;font-size:14px">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#6B5F4A;display:block;margin-bottom:6px">不及格科目達幾科</label>
+            <input type="number" id="alert-fail-subject-count" min="1" max="9" value="3" style="width:100%;padding:10px;border:1px solid #C8BA9E;border-radius:8px;font-size:14px">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#6B5F4A;display:block;margin-bottom:6px">校排低於幾名（0=不設定）</label>
+            <input type="number" id="alert-school-rank-threshold" min="0" value="0" style="width:100%;padding:10px;border:1px solid #C8BA9E;border-radius:8px;font-size:14px">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveAlertConfig()">💾 儲存設定</button>
+      </div>
+      <div class="card mb-16">
+        <div class="card-title">📐 各科個別及格門檻 <span style="font-size:11px;font-weight:400;color:#9E9890">（留空表示使用上方全域門檻）</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px" id="subject-threshold-grid">
+          <!-- 由 renderAlertSettings() 動態產生 -->
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 目前需關注名單</div>
+        <div id="alert-list-wrap"></div>
+      </div>
+    </div>
+
+    <!-- ── 外觀設定 ── -->
+    <div id="page-settings" class="hidden">
+      <div class="section-header mb-16">
+        <div>
+          <div class="section-title">首頁外觀設定</div>
+          <div class="section-sub">自訂登入頁的文字與色彩風格</div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-title">📝 文字設定</div>
+          <div class="hp-field"><label>學校名稱</label><input type="text" id="hp-school" oninput="hpPreview()"></div>
+          <div class="hp-field"><label>主標題（換行用 ↵）</label><textarea id="hp-title" oninput="hpPreview()"></textarea></div>
+          <div class="hp-field"><label>英文副標</label><input type="text" id="hp-en" oninput="hpPreview()"></div>
+          <div class="hp-field"><label>說明文字</label><input type="text" id="hp-sub" oninput="hpPreview()"></div>
+          <div class="hp-field"><label>引言</label><input type="text" id="hp-quote" oninput="hpPreview()"></div>
+        </div>
+        <div>
+          <div class="card mb-16">
+            <div class="card-title">🎨 顏色設定</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="hp-field"><label>左側背景色</label>
+                <div style="display:flex;gap:6px"><input type="color" id="hp-bg-color" value="#1C1A14" oninput="document.getElementById('hp-bg-color-hex').value=this.value;hpPreview()" style="width:36px;height:32px;padding:2px;border:1px solid #C8BA9E;border-radius:4px;cursor:pointer">
+                <input type="text" id="hp-bg-color-hex" value="#1C1A14" oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('hp-bg-color').value=this.value;hpPreview()}" style="flex:1;font-family:monospace;font-size:12px"></div></div>
+              <div class="hp-field"><label>主標題顏色</label>
+                <div style="display:flex;gap:6px"><input type="color" id="hp-title-color" value="#F5F0E8" oninput="document.getElementById('hp-title-color-hex').value=this.value;hpPreview()" style="width:36px;height:32px;padding:2px;border:1px solid #C8BA9E;border-radius:4px;cursor:pointer">
+                <input type="text" id="hp-title-color-hex" value="#F5F0E8" oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('hp-title-color').value=this.value;hpPreview()}" style="flex:1;font-family:monospace;font-size:12px"></div></div>
+              <div class="hp-field"><label>強調色</label>
+                <div style="display:flex;gap:6px"><input type="color" id="hp-accent-color" value="#C8A850" oninput="document.getElementById('hp-accent-color-hex').value=this.value;hpPreview()" style="width:36px;height:32px;padding:2px;border:1px solid #C8BA9E;border-radius:4px;cursor:pointer">
+                <input type="text" id="hp-accent-color-hex" value="#C8A850" oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('hp-accent-color').value=this.value;hpPreview()}" style="flex:1;font-family:monospace;font-size:12px"></div></div>
+              <div class="hp-field"><label>次要文字</label>
+                <div style="display:flex;gap:6px"><input type="color" id="hp-sub-color" value="#E8D098" oninput="document.getElementById('hp-sub-color-hex').value=this.value;hpPreview()" style="width:36px;height:32px;padding:2px;border:1px solid #C8BA9E;border-radius:4px;cursor:pointer">
+                <input type="text" id="hp-sub-color-hex" value="#E8D098" oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('hp-sub-color').value=this.value;hpPreview()}" style="flex:1;font-family:monospace;font-size:12px"></div></div>
+              <div class="hp-field"><label>右側背景色</label>
+                <div style="display:flex;gap:6px"><input type="color" id="hp-right-bg" value="#F5F0E8" oninput="document.getElementById('hp-right-bg-hex').value=this.value;hpPreview()" style="width:36px;height:32px;padding:2px;border:1px solid #C8BA9E;border-radius:4px;cursor:pointer">
+                <input type="text" id="hp-right-bg-hex" value="#F5F0E8" oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('hp-right-bg').value=this.value;hpPreview()}" style="flex:1;font-family:monospace;font-size:12px"></div></div>
+              <div class="hp-field"><label>頁面背景色</label>
+                <div style="display:flex;gap:6px"><input type="color" id="hp-body-bg" value="#F5F0E8" oninput="document.getElementById('hp-body-bg-hex').value=this.value;hpPreview()" style="width:36px;height:32px;padding:2px;border:1px solid #C8BA9E;border-radius:4px;cursor:pointer">
+                <input type="text" id="hp-body-bg-hex" value="#F5F0E8" oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('hp-body-bg').value=this.value;hpPreview()}" style="flex:1;font-family:monospace;font-size:12px"></div></div>
+            </div>
+          </div>
+          <div class="card mb-16">
+            <div class="card-title">⚡ 快速套用主題</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              <button class="btn" onclick="applyTheme('classic')">🏛️ 古典金（預設）</button>
+              <button class="btn" onclick="applyTheme('navy')">🌊 深海藍</button>
+              <button class="btn" onclick="applyTheme('forest')">🌿 森林綠</button>
+              <button class="btn" onclick="applyTheme('slate')">🪨 礦石灰</button>
+              <button class="btn" onclick="applyTheme('crimson')">🌹 緋紅典雅</button>
+              <button class="btn" onclick="applyTheme('ivory')">🤍 象牙白</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">👁 預覽</div>
+            <div id="hp-preview-bar" style="background:#1C1A14;border-radius:8px;padding:14px">
+              <div id="prev-school" style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#E8D098;margin-bottom:4px;font-weight:500"></div>
+              <div id="prev-title" style="font-size:28px;font-weight:900;color:#F5F0E8;line-height:1.1;margin-bottom:3px"></div>
+              <div id="prev-en" style="font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#C8A850;margin-bottom:3px"></div>
+              <div id="prev-sub" style="font-size:11px;color:#E8D098"></div>
+              <div id="prev-quote" style="font-size:11px;color:#E8D098;font-style:italic;margin-top:6px;opacity:.8"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:16px;padding:12px 16px;background:#FAF7F0;border:1px solid #C8BA9E;border-radius:8px">
+        <button class="btn btn-primary" onclick="saveHomepageStyle()">💾 儲存設定</button>
+        <button class="btn" onclick="resetHomepageStyle()">↺ 恢復預設</button>
+        <span id="hp-save-msg" class="hidden" style="font-size:12px;color:#2E5A1A">✓ 設定已儲存</span>
+        <span style="margin-left:auto;font-size:11px;color:#8B7355">儲存後登入頁立即更新</span>
+      </div>
+
+      <!-- 資料備份 -->
+      <div class="card mt-16" style="margin-top:16px">
+        <div class="card-title">🗄️ 資料備份與還原</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+          <button class="btn btn-primary" onclick="exportData()">⬇ 匯出完整備份（JSON）</button>
+          <button class="btn" onclick="document.getElementById('import-file-settings').click()">⬆ 從備份還原</button>
+          <input type="file" id="import-file-settings" accept=".json" style="display:none" onchange="importData(event)">
+          <span style="font-size:12px;color:#9E9890">建議每學期末匯出一次備份，萬一 Firebase 出問題可從備份還原。備份包含：學生名單、所有成績、導師評語、學生備忘錄。</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.main -->
+</div><!-- /#main-page -->
+
+<!-- ════════════════════════════════════════════════════════
+     MODALS
+════════════════════════════════════════════════════════ -->
+
+<!-- 新增/編輯學生 -->
+<div id="modal-student-bg" class="modal-bg hidden" onclick="if(event.target===this)closeStudentModal()">
+  <div class="modal">
+    <div class="modal-title" id="modal-student-title">新增學生</div>
+    <input type="hidden" id="s-id-hidden">
+    <div class="grid2 mb-12">
+      <div><label>姓名 *</label><input type="text" id="s-name" placeholder="例：王小明"></div>
+      <div><label>座號</label><input type="number" id="s-number" placeholder="1" min="1" max="99"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeStudentModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveStudent()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 登出確認 -->
+<div id="logout-modal-bg" class="modal-bg hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="confirm-modal">
+    <h3>確認登出？</h3>
+    <p>登出後需重新輸入帳號密碼。</p>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn" onclick="document.getElementById('logout-modal-bg').classList.add('hidden')">取消</button>
+      <button class="btn btn-danger" onclick="doLogout()">確認登出</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="m-nav no-print">
+  <div class="m-nav-inner">
+    <button class="m-nav-btn active" id="mnav-overview" onclick="switchPage('overview')"><span class="ico">📊</span>總覽</button>
+    <button class="m-nav-btn" id="mnav-students" onclick="switchPage('students')"><span class="ico">👤</span>名單</button>
+    <button class="m-nav-btn" id="mnav-input" onclick="switchPage('input')"><span class="ico">✏️</span>成績</button>
+    <button class="m-nav-btn" id="mnav-analysis" onclick="switchPage('analysis')"><span class="ico">📈</span>分析</button>
+    <button class="m-nav-btn" id="mnav-report" onclick="switchPage('report')"><span class="ico">🖨</span>報告</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     SCRIPTS
+════════════════════════════════════════════════════════ -->
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
