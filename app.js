@@ -12,6 +12,106 @@ try {
   console.warn("Firebase init failed:", e.message);
 }
 
+
+// ── 載入動畫控制 ──────────────────────────────────────────────
+function showLoader(msg) {
+  const el = document.getElementById("app-loader");
+  const msgEl = document.getElementById("loader-msg");
+  if (el) { el.style.opacity = "1"; el.style.display = "flex"; }
+  if (msgEl && msg) msgEl.textContent = msg;
+}
+function hideLoader() {
+  const el = document.getElementById("app-loader");
+  if (!el) return;
+  el.style.opacity = "0";
+  setTimeout(() => { el.style.display = "none"; }, 420);
+}
+// 初始：Firebase 載入前先顯示 loader
+// 監聽 Firebase Auth（重新整理後自動登入）
+(function() {
+  if (!auth) { hideLoader(); return; }
+
+  // 安全機制：最多等 8 秒，超時自動隱藏 loader 顯示登入頁
+  const loaderTimeout = setTimeout(() => {
+    hideLoader();
+    const lp = document.getElementById("login-page");
+    if (lp) lp.classList.remove("hidden");
+  }, 8000);
+
+  auth.onAuthStateChanged(async user => {
+    clearTimeout(loaderTimeout);
+
+    const mainPage = document.getElementById("main-page");
+    if (mainPage && !mainPage.classList.contains("hidden")) { hideLoader(); return; }
+
+    if (!user) {
+      hideLoader();
+      const lp = document.getElementById("login-page");
+      if (lp) lp.classList.remove("hidden");
+      return;
+    }
+
+    try {
+      showLoader("自動登入中...");
+      let teacherDoc = null;
+      const byUid = await db.collection("teachers").doc(user.uid).get();
+      if (byUid.exists) {
+        teacherDoc = byUid.data();
+      } else {
+        const email = user.email || "";
+        const acc = email.includes("@") ? email.split("@")[0] : email;
+        const byAcc = await db.collection("teachers").where("account", "==", acc).limit(1).get();
+        if (!byAcc.empty) teacherDoc = byAcc.docs[0].data();
+      }
+
+      if (!teacherDoc) {
+        auth.signOut();
+        hideLoader();
+        const lp = document.getElementById("login-page");
+        if (lp) lp.classList.remove("hidden");
+        return;
+      }
+
+      PREFIX = teacherDoc.classPrefix + "_";
+      CURRENT_CLASS.prefix      = teacherDoc.classPrefix;
+      CURRENT_CLASS.className   = teacherDoc.className   || CLASS_NAME;
+      CURRENT_CLASS.classYear   = teacherDoc.classYear   || CLASS_YEAR;
+      CURRENT_CLASS.teacherName = teacherDoc.teacherName || "";
+      CURRENT_CLASS.isAdmin     = teacherDoc.isAdmin === true;
+
+      if (Array.isArray(teacherDoc.subjects) && teacherDoc.subjects.length > 0) {
+        ACTIVE_SUBJECTS = teacherDoc.subjects;
+      } else {
+        ACTIVE_SUBJECTS = (typeof SUBJECTS !== "undefined") ? [...SUBJECTS] : [];
+      }
+      if (Array.isArray(teacherDoc.exams) && teacherDoc.exams.length > 0) {
+        ACTIVE_EXAMS = teacherDoc.exams;
+      } else {
+        ACTIVE_EXAMS = (typeof EXAMS !== "undefined") ? [...EXAMS] : [];
+      }
+
+      if (CURRENT_CLASS.isAdmin) {
+        try {
+          const allSnap = await db.collection("teachers").get();
+          CURRENT_CLASS.allClasses = allSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch(e) { CURRENT_CLASS.allClasses = []; }
+      }
+
+      S.cur     = teacherDoc.account || "";
+      S.isAdmin = CURRENT_CLASS.isAdmin;
+      await loadAllData();
+      hideLoader();
+      showMainPage();
+
+    } catch(e) {
+      console.warn("自動登入失敗：", e.message);
+      hideLoader();
+      const lp = document.getElementById("login-page");
+      if (lp) lp.classList.remove("hidden");
+    }
+  });
+})();
+
 // 動態科目與段考（登入後可被 Firestore 覆蓋）
 // 預設值來自 config.js，各班可在 teachers 文件裡自訂
 let ACTIVE_SUBJECTS = (typeof SUBJECTS !== "undefined") ? [...SUBJECTS] : [];
@@ -207,6 +307,7 @@ async function doLogin() {
     S.cur     = acc;
     S.isAdmin = CURRENT_CLASS.isAdmin;
     await loadAllData();
+    hideLoader();
     showMainPage();
 
   } catch(err) {
@@ -250,85 +351,6 @@ function doLogout() {
   $("lacc").value = ""; $("lpw").value = "";
   hide("logout-modal-bg");
   showToast("已成功登出 👋");
-}
-
-// ── 自動重新登入（重新整理後不需重新輸入密碼）────────────────
-if (auth) {
-  auth.onAuthStateChanged(async user => {
-    // 如果 main-page 已顯示（正常登入流程），不重複執行
-    const mainPage = document.getElementById("main-page");
-    if (mainPage && !mainPage.classList.contains("hidden")) return;
-
-    if (!user) {
-      // 未登入，顯示登入頁
-      const loginPage = document.getElementById("login-page");
-      if (loginPage) loginPage.classList.remove("hidden");
-      return;
-    }
-
-    // 已登入：從 Firebase 查回帳號資料
-    try {
-      const loginPage = document.getElementById("login-page");
-      if (loginPage) {
-        const hint = document.getElementById("linfo");
-        if (hint) { hint.textContent = "⏳ 自動登入中..."; hint.style.display = "block"; }
-      }
-
-      // 先用 uid 查 teachers
-      let teacherDoc = null;
-      const byUid = await db.collection("teachers").doc(user.uid).get();
-      if (byUid.exists) {
-        teacherDoc = byUid.data();
-      } else {
-        // 用 email 反查帳號
-        const email = user.email || "";
-        const acc = email.includes("@") ? email.split("@")[0] : email;
-        const byAcc = await db.collection("teachers").where("account", "==", acc).limit(1).get();
-        if (!byAcc.empty) teacherDoc = byAcc.docs[0].data();
-      }
-
-      if (!teacherDoc) { auth.signOut(); return; }
-
-      // 還原班級設定
-      PREFIX = teacherDoc.classPrefix + "_";
-      CURRENT_CLASS.prefix      = teacherDoc.classPrefix;
-      CURRENT_CLASS.className   = teacherDoc.className   || CLASS_NAME;
-      CURRENT_CLASS.classYear   = teacherDoc.classYear   || CLASS_YEAR;
-      CURRENT_CLASS.teacherName = teacherDoc.teacherName || "";
-      CURRENT_CLASS.isAdmin     = teacherDoc.isAdmin === true;
-
-      if (Array.isArray(teacherDoc.subjects) && teacherDoc.subjects.length > 0) {
-        ACTIVE_SUBJECTS = teacherDoc.subjects;
-      } else {
-        ACTIVE_SUBJECTS = (typeof SUBJECTS !== "undefined") ? [...SUBJECTS] : [];
-      }
-      if (Array.isArray(teacherDoc.exams) && teacherDoc.exams.length > 0) {
-        ACTIVE_EXAMS = teacherDoc.exams;
-      } else {
-        ACTIVE_EXAMS = (typeof EXAMS !== "undefined") ? [...EXAMS] : [];
-      }
-
-      // 管理者：載入所有班級
-      if (CURRENT_CLASS.isAdmin) {
-        try {
-          const allSnap = await db.collection("teachers").get();
-          CURRENT_CLASS.allClasses = allSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        } catch(e) { CURRENT_CLASS.allClasses = []; }
-      }
-
-      S.cur     = teacherDoc.account || "";
-      S.isAdmin = CURRENT_CLASS.isAdmin;
-      await loadAllData();
-      showMainPage();
-
-    } catch(e) {
-      console.warn("自動登入失敗：", e.message);
-      const loginPage = document.getElementById("login-page");
-      if (loginPage) loginPage.classList.remove("hidden");
-      const hint = document.getElementById("linfo");
-      if (hint) hint.style.display = "none";
-    }
-  });
 }
 
 // ── 顯示主頁面 ────────────────────────────────────────────────
@@ -1013,7 +1035,7 @@ function jumpToAnalysisAndSwitch(studentId) {
 }
 
 function switchPage(name) {
-  ["overview","students","input","analysis","report","settings","summary","alert-settings"].forEach(p => {
+  ["overview","students","input","analysis","report","settings","summary","alert-settings","track"].forEach(p => {
     const el = $("page-"+p);
     if (el) el.classList.toggle("hidden", p !== name);
     const tab = $("tab-"+p);
@@ -1050,6 +1072,14 @@ function switchPage(name) {
   if (name === "settings")       initSettingsEditor();
   if (name === "summary")        renderSummaryPage();
   if (name === "alert-settings") { loadAlertConfig(); renderAlertList(); }
+  if (name === "track") {
+    // 初始化科目選單
+    const sel = $("track-subject-sel");
+    if (sel) {
+      sel.innerHTML = ACTIVE_SUBJECTS.map(s => `<option value="${s}">${s}</option>`).join("");
+    }
+    renderSubjectTrackTable();
+  }
 }
 
 // ── Firestore 資料載入 ────────────────────────────────────────
@@ -2385,6 +2415,78 @@ function getSubjectRank(studentId, examId, subject) {
     if (allVals[i] === myVal) return rank;
   }
   return null;
+}
+
+
+// ── 科目追蹤表（全班同一科目歷次趨勢）────────────────────────
+function renderSubjectTrackTable() {
+  const wrap = $("subject-track-wrap"); if (!wrap) return;
+  const sub  = $("track-subject-sel")?.value;
+  if (!sub || !S.students.length) {
+    wrap.innerHTML = '<div class="empty-state small"><div class="empty-icon">📊</div><div class="empty-title">請選擇科目</div></div>';
+    return;
+  }
+
+  const exams = ACTIVE_EXAMS;
+  // 表格標頭
+  let html = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th style="min-width:32px">座號</th>
+      <th style="min-width:64px">姓名</th>`;
+  exams.forEach(ex => {
+    html += `<th style="text-align:center;min-width:52px">${ex.name.replace("次段考","").replace("第","")}</th>`;
+  });
+  html += `<th style="text-align:center;min-width:52px">平均</th>
+      <th style="text-align:center;min-width:60px">趨勢</th>
+    </tr></thead><tbody>`;
+
+  S.students.forEach(st => {
+    const vals = exams.map(ex => {
+      const v = getScores(st.id, ex.id)[sub];
+      return (v !== undefined && v !== "") ? parseFloat(v) : null;
+    });
+    const filled = vals.filter(v => v !== null);
+    const stAvg  = filled.length ? filled.reduce((a,b)=>a+b,0)/filled.length : null;
+    const first  = filled.length ? vals.find(v=>v!==null) : null;
+    const last   = filled.length ? [...vals].reverse().find(v=>v!==null) : null;
+    const trend  = (first !== null && last !== null && filled.length >= 2) ? last - first : null;
+    const trendHtml = trend === null ? '<span style="color:#C8BA9E">—</span>'
+      : trend > 5  ? `<span style="color:#2E5A1A;font-weight:700">▲ +${trend.toFixed(0)}</span>`
+      : trend < -5 ? `<span style="color:#8B2222;font-weight:700">▼ ${trend.toFixed(0)}</span>`
+      : `<span style="color:#6B5F4A">≈ ${trend>0?"+":""}${trend.toFixed(0)}</span>`;
+
+    html += `<tr>
+      <td class="mono">${String(st.number||"").padStart(2,"0")}</td>
+      <td class="bold">${st.name}</td>`;
+    vals.forEach(v => {
+      const cls = v === null ? "muted" : v >= 80 ? "score-high" : v < 60 ? "score-low" : "";
+      html += `<td class="score-cell ${cls}">${v !== null ? v.toFixed(0) : "—"}</td>`;
+    });
+    html += `<td class="score-cell bold" style="color:#1C4A6B">${stAvg !== null ? stAvg.toFixed(1) : "—"}</td>
+      <td class="score-cell">${trendHtml}</td>
+    </tr>`;
+  });
+
+  // 班級平均列
+  html += `<tr style="background:#FAF7F0;font-weight:700;border-top:2px solid #C8BA9E">
+    <td colspan="2" style="color:#6B5F4A;font-size:12px;letter-spacing:.04em">班級平均</td>`;
+  exams.forEach(ex => {
+    const vs = S.students.map(st => {
+      const v = getScores(st.id, ex.id)[sub];
+      return (v !== undefined && v !== "") ? parseFloat(v) : null;
+    }).filter(v => v !== null);
+    const ea = vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
+    const cls = ea === null ? "muted" : ea >= 80 ? "score-high" : ea < 60 ? "score-low" : "";
+    html += `<td class="score-cell ${cls}">${ea !== null ? ea.toFixed(1) : "—"}</td>`;
+  });
+  const allVals = ACTIVE_EXAMS.flatMap(ex =>
+    S.students.map(st => { const v = getScores(st.id,ex.id)[sub]; return (v!==undefined&&v!=="") ? parseFloat(v) : null; })
+  ).filter(v => v !== null);
+  const allAvg = allVals.length ? allVals.reduce((a,b)=>a+b,0)/allVals.length : null;
+  html += `<td class="score-cell score-high">${allAvg !== null ? allAvg.toFixed(1) : "—"}</td><td></td></tr>`;
+
+  html += `</tbody></table></div>`;
+  wrap.innerHTML = html;
 }
 
 // ── 個人分析頁 ────────────────────────────────────────────────
@@ -4863,6 +4965,65 @@ async function deleteNote(sem) {
     showToast(`🗑️ ${sem}學期筆記已刪除`);
     loadNotes();
   } catch(e) { showToast("刪除失敗：" + e.message); }
+}
+
+
+// ── 不及格名單快速顯示 ────────────────────────────────────────
+function showFailList() {
+  const examEl = $("input-exam");
+  if (!examEl || !examEl.value) { showToast("請先選擇段考"); return; }
+  const examId   = examEl.value;
+  const examName = examEl.options[examEl.selectedIndex]?.text || examId;
+  const maxScore = getExamMaxScore(examId);
+  const passLine = maxScore * 0.6;
+
+  const fails = S.students.map(st => {
+    const sc = getScores(st.id, examId);
+    const total = getTotal(sc);
+    const failSubs = ACTIVE_SUBJECTS.filter(sub => {
+      const v = sc[sub];
+      return v !== undefined && v !== "" && parseFloat(v) < 60;
+    });
+    return { st, total, failSubs };
+  }).filter(x => x.failSubs.length > 0)
+    .sort((a,b) => (a.total||9999) - (b.total||9999));
+
+  const modal = $("fail-list-modal");
+  const body  = $("fail-list-body");
+  if (!modal || !body) { showToast("介面元素缺失"); return; }
+
+  if (!fails.length) {
+    body.innerHTML = `<div class="empty-state small"><div class="empty-icon">🎉</div><div class="empty-title">本次段考全班無不及格科目！</div></div>`;
+  } else {
+    let html = `<div style="margin-bottom:12px;font-size:12px;color:#6B5F4A">共 <strong>${fails.length}</strong> 位學生有不及格科目</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="background:#FAF7F0;padding:6px 10px;text-align:left;font-size:11px;color:#6B5F4A;border-bottom:1px solid #E0DAD0">座號</th>
+        <th style="background:#FAF7F0;padding:6px 10px;text-align:left;font-size:11px;color:#6B5F4A;border-bottom:1px solid #E0DAD0">姓名</th>
+        <th style="background:#FAF7F0;padding:6px 10px;text-align:left;font-size:11px;color:#6B5F4A;border-bottom:1px solid #E0DAD0">不及格科目</th>
+        <th style="background:#FAF7F0;padding:6px 10px;text-align:center;font-size:11px;color:#6B5F4A;border-bottom:1px solid #E0DAD0">總分</th>
+      </tr></thead><tbody>`;
+    fails.forEach(({st, total, failSubs}) => {
+      const tc = total !== null && total < passLine ? "#8B2222" : "#1C1A14";
+      html += `<tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #EEE8E0;font-family:monospace">${String(st.number||"").padStart(2,"0")}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #EEE8E0;font-weight:600">${st.name}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #EEE8E0">
+          ${failSubs.map(s=>`<span style="display:inline-block;background:#FAECEC;color:#8B2222;border-radius:4px;padding:1px 7px;font-size:11px;margin:1px">${s}</span>`).join(" ")}
+        </td>
+        <td style="padding:6px 10px;border-bottom:1px solid #EEE8E0;text-align:center;font-family:monospace;font-weight:700;color:${tc}">${total !== null ? total.toFixed(0) : "—"}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    body.innerHTML = html;
+  }
+  $("fail-list-title").textContent = `${examName} · 不及格名單`;
+  modal.style.display = "flex";
+}
+
+function closeFailListModal() {
+  const modal = $("fail-list-modal");
+  if (modal) modal.style.display = "none";
 }
 
 // ── 清除全班所有段考的校排資料 ──────────────────────────────
