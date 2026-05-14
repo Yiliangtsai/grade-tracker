@@ -351,10 +351,10 @@ input[type="checkbox"]{margin-right:4px}
   .report-section{page-break-inside:avoid}
   .report-table tr{page-break-inside:avoid}
   .m-nav,.toast{display:none!important}
-  /* 家長通知單：強制從新頁開始，內部不分頁 */
-  .parent-notice{page-break-before:always!important;page-break-inside:avoid!important}
-  .parent-notice table{page-break-inside:avoid!important}
-  .parent-notice tr{page-break-inside:avoid!important}
+  /* 家長通知單：強制從新頁開始，整體不分頁 */
+  .parent-notice{page-break-before:always!important;break-before:page!important;page-break-inside:avoid!important;break-inside:avoid!important}
+  .parent-notice table{page-break-inside:avoid!important;break-inside:avoid!important}
+  #parent-notice-wrap{page-break-before:always!important;break-before:page!important}
 
   /* ── 報告列印優化 ── */
   .report-paper{ box-shadow:none!important; border:none!important; }

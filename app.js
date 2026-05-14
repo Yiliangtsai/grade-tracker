@@ -13,42 +13,19 @@ try {
 }
 
 
-// ── 載入動畫控制（用 document.getElementById 避免 $ 未定義）──
-function showLoader(msg) {
-  const el = document.getElementById("app-loader");
-  const msgEl = document.getElementById("loader-msg");
-  if (el) { el.style.opacity = "1"; el.style.display = "flex"; }
-  if (msgEl && msg) msgEl.textContent = msg;
-}
-function hideLoader() {
-  const el = document.getElementById("app-loader");
-  if (!el) return;
-  el.style.opacity = "0";
-  setTimeout(() => { el.style.display = "none"; }, 420);
-}
-
 // ── 自動重新登入（重新整理後不需重新輸入密碼）────────────────
 if (auth) {
-  // 顯示 loader，最多等 8 秒自動隱藏（防止卡住）
-  showLoader("載入中...");
-  const _loaderTimeout = setTimeout(() => {
-    hideLoader();
-    const lp = document.getElementById("login-page");
-    if (lp) lp.classList.remove("hidden");
-  }, 8000);
-
   auth.onAuthStateChanged(async user => {
-    clearTimeout(_loaderTimeout);
     const mainPage = document.getElementById("main-page");
-    if (mainPage && !mainPage.classList.contains("hidden")) { hideLoader(); return; }
+    if (mainPage && !mainPage.classList.contains("hidden")) return;
     if (!user) {
-      hideLoader();
       const lp = document.getElementById("login-page");
       if (lp) lp.classList.remove("hidden");
       return;
     }
     try {
-      showLoader("自動登入中...");
+      const linfo = document.getElementById("linfo");
+      if (linfo) { linfo.textContent = "⏳ 自動登入中..."; linfo.style.display = "block"; }
       let teacherDoc = null;
       const byUid = await db.collection("teachers").doc(user.uid).get();
       if (byUid.exists) {
@@ -59,7 +36,7 @@ if (auth) {
         const byAcc = await db.collection("teachers").where("account", "==", acc).limit(1).get();
         if (!byAcc.empty) teacherDoc = byAcc.docs[0].data();
       }
-      if (!teacherDoc) { auth.signOut(); hideLoader(); return; }
+      if (!teacherDoc) { auth.signOut(); return; }
       PREFIX = teacherDoc.classPrefix + "_";
       CURRENT_CLASS.prefix      = teacherDoc.classPrefix;
       CURRENT_CLASS.className   = teacherDoc.className   || CLASS_NAME;
@@ -85,19 +62,13 @@ if (auth) {
       S.cur     = teacherDoc.account || "";
       S.isAdmin = CURRENT_CLASS.isAdmin;
       await loadAllData();
-      hideLoader();
       showMainPage();
     } catch(e) {
       console.warn("自動登入失敗：", e.message);
-      hideLoader();
       const lp = document.getElementById("login-page");
       if (lp) lp.classList.remove("hidden");
     }
   });
-} else {
-  // Firebase 不可用，直接顯示登入頁
-  const lp = document.getElementById("login-page");
-  if (lp) lp.classList.remove("hidden");
 }
 
 // 動態科目與段考（登入後可被 Firestore 覆蓋）
@@ -5333,7 +5304,7 @@ function renderParentNotice() {
   });
 
   wrap.innerHTML = `
-    <div class="parent-notice no-screen" style="border:2px solid #1C1A14;border-radius:8px;padding:24px;max-width:600px;font-family:'Noto Sans TC',sans-serif;background:#fff">
+    <div class="parent-notice no-screen" style="border:2px solid #1C1A14;border-radius:8px;padding:24px;max-width:600px;font-family:'Noto Sans TC',sans-serif;background:#fff;page-break-before:always;page-break-inside:avoid;break-before:page;break-inside:avoid">
       <div style="text-align:center;border-bottom:2px solid #1C1A14;padding-bottom:12px;margin-bottom:16px">
         <div style="font-size:11px;color:#6B5F4A;letter-spacing:.1em">${getClassName()} · ${getClassYear()}</div>
         <div style="font-size:20px;font-weight:900;margin:4px 0">段考成績通知單</div>
@@ -5345,7 +5316,7 @@ function renderParentNotice() {
         <div><span style="font-size:12px;color:#6B5F4A">班排名：</span><strong>${sc["班排"]||"—"}</strong> 名</div>
         <div><span style="font-size:12px;color:#6B5F4A">校排名：</span><strong>${sc["校排"]||"—"}</strong> 名</div>
       </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px;page-break-inside:avoid;break-inside:avoid">
         <thead><tr style="background:#F5F0E8">
           ${ACTIVE_SUBJECTS.map(s=>`<th style="padding:6px 8px;text-align:center;border:1px solid #C8BA9E;font-size:11px">${s}</th>`).join("")}
           <th style="padding:6px 8px;text-align:center;border:1px solid #C8BA9E;background:#E8E0D0">總分</th>
