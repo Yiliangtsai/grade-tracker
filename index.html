@@ -487,6 +487,23 @@ tfoot td{padding:8px 10px;font-size:12px}
 <!-- ════════════════════════════════════════════════════════
      LOGIN PAGE
 ════════════════════════════════════════════════════════ -->
+<!-- ── 載入動畫 ── -->
+<style>
+@keyframes loaderPulse {
+  0%,100%{opacity:.25;transform:scale(.75)}
+  50%{opacity:1;transform:scale(1.1)}
+}
+</style>
+<div id="app-loader" style="position:fixed;inset:0;background:#1C1A14;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .4s ease">
+  <div style="font-size:28px;font-weight:900;color:#F5F0E8;letter-spacing:-.02em;margin-bottom:20px">成績追蹤系統</div>
+  <div style="display:flex;gap:10px;margin-bottom:20px">
+    <div style="width:10px;height:10px;border-radius:50%;background:#C8A850;animation:loaderPulse 1.2s ease-in-out 0s infinite"></div>
+    <div style="width:10px;height:10px;border-radius:50%;background:#C8A850;animation:loaderPulse 1.2s ease-in-out .2s infinite"></div>
+    <div style="width:10px;height:10px;border-radius:50%;background:#C8A850;animation:loaderPulse 1.2s ease-in-out .4s infinite"></div>
+  </div>
+  <div id="loader-msg" style="font-size:13px;color:#A89060;letter-spacing:.06em">載入中...</div>
+</div>
+
 <div id="login-page">
   <div class="login-shell">
     <!-- 左側 -->

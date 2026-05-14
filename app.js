@@ -13,19 +13,42 @@ try {
 }
 
 
+// ── 載入動畫控制（用 document.getElementById 避免 $ 未定義）──
+function showLoader(msg) {
+  const el = document.getElementById("app-loader");
+  const msgEl = document.getElementById("loader-msg");
+  if (el) { el.style.opacity = "1"; el.style.display = "flex"; }
+  if (msgEl && msg) msgEl.textContent = msg;
+}
+function hideLoader() {
+  const el = document.getElementById("app-loader");
+  if (!el) return;
+  el.style.opacity = "0";
+  setTimeout(() => { el.style.display = "none"; }, 420);
+}
+
 // ── 自動重新登入（重新整理後不需重新輸入密碼）────────────────
 if (auth) {
+  // 顯示 loader，最多等 8 秒自動隱藏（防止卡住）
+  showLoader("載入中...");
+  const _loaderTimeout = setTimeout(() => {
+    hideLoader();
+    const lp = document.getElementById("login-page");
+    if (lp) lp.classList.remove("hidden");
+  }, 8000);
+
   auth.onAuthStateChanged(async user => {
+    clearTimeout(_loaderTimeout);
     const mainPage = document.getElementById("main-page");
-    if (mainPage && !mainPage.classList.contains("hidden")) return;
+    if (mainPage && !mainPage.classList.contains("hidden")) { hideLoader(); return; }
     if (!user) {
+      hideLoader();
       const lp = document.getElementById("login-page");
       if (lp) lp.classList.remove("hidden");
       return;
     }
     try {
-      const linfo = document.getElementById("linfo");
-      if (linfo) { linfo.textContent = "⏳ 自動登入中..."; linfo.style.display = "block"; }
+      showLoader("自動登入中...");
       let teacherDoc = null;
       const byUid = await db.collection("teachers").doc(user.uid).get();
       if (byUid.exists) {
@@ -36,7 +59,7 @@ if (auth) {
         const byAcc = await db.collection("teachers").where("account", "==", acc).limit(1).get();
         if (!byAcc.empty) teacherDoc = byAcc.docs[0].data();
       }
-      if (!teacherDoc) { auth.signOut(); return; }
+      if (!teacherDoc) { auth.signOut(); hideLoader(); return; }
       PREFIX = teacherDoc.classPrefix + "_";
       CURRENT_CLASS.prefix      = teacherDoc.classPrefix;
       CURRENT_CLASS.className   = teacherDoc.className   || CLASS_NAME;
@@ -62,13 +85,19 @@ if (auth) {
       S.cur     = teacherDoc.account || "";
       S.isAdmin = CURRENT_CLASS.isAdmin;
       await loadAllData();
+      hideLoader();
       showMainPage();
     } catch(e) {
       console.warn("自動登入失敗：", e.message);
+      hideLoader();
       const lp = document.getElementById("login-page");
       if (lp) lp.classList.remove("hidden");
     }
   });
+} else {
+  // Firebase 不可用，直接顯示登入頁
+  const lp = document.getElementById("login-page");
+  if (lp) lp.classList.remove("hidden");
 }
 
 // 動態科目與段考（登入後可被 Firestore 覆蓋）
