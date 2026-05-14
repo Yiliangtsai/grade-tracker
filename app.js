@@ -27,90 +27,7 @@ function hideLoader() {
   setTimeout(() => { el.style.display = "none"; }, 420);
 }
 // 初始：Firebase 載入前先顯示 loader
-// 監聽 Firebase Auth（重新整理後自動登入）
-(function() {
-  if (!auth) { hideLoader(); return; }
-
-  // 安全機制：最多等 8 秒，超時自動隱藏 loader 顯示登入頁
-  const loaderTimeout = setTimeout(() => {
-    hideLoader();
-    const lp = document.getElementById("login-page");
-    if (lp) lp.classList.remove("hidden");
-  }, 8000);
-
-  auth.onAuthStateChanged(async user => {
-    clearTimeout(loaderTimeout);
-
-    const mainPage = document.getElementById("main-page");
-    if (mainPage && !mainPage.classList.contains("hidden")) { hideLoader(); return; }
-
-    if (!user) {
-      hideLoader();
-      const lp = document.getElementById("login-page");
-      if (lp) lp.classList.remove("hidden");
-      return;
-    }
-
-    try {
-      showLoader("自動登入中...");
-      let teacherDoc = null;
-      const byUid = await db.collection("teachers").doc(user.uid).get();
-      if (byUid.exists) {
-        teacherDoc = byUid.data();
-      } else {
-        const email = user.email || "";
-        const acc = email.includes("@") ? email.split("@")[0] : email;
-        const byAcc = await db.collection("teachers").where("account", "==", acc).limit(1).get();
-        if (!byAcc.empty) teacherDoc = byAcc.docs[0].data();
-      }
-
-      if (!teacherDoc) {
-        auth.signOut();
-        hideLoader();
-        const lp = document.getElementById("login-page");
-        if (lp) lp.classList.remove("hidden");
-        return;
-      }
-
-      PREFIX = teacherDoc.classPrefix + "_";
-      CURRENT_CLASS.prefix      = teacherDoc.classPrefix;
-      CURRENT_CLASS.className   = teacherDoc.className   || CLASS_NAME;
-      CURRENT_CLASS.classYear   = teacherDoc.classYear   || CLASS_YEAR;
-      CURRENT_CLASS.teacherName = teacherDoc.teacherName || "";
-      CURRENT_CLASS.isAdmin     = teacherDoc.isAdmin === true;
-
-      if (Array.isArray(teacherDoc.subjects) && teacherDoc.subjects.length > 0) {
-        ACTIVE_SUBJECTS = teacherDoc.subjects;
-      } else {
-        ACTIVE_SUBJECTS = (typeof SUBJECTS !== "undefined") ? [...SUBJECTS] : [];
-      }
-      if (Array.isArray(teacherDoc.exams) && teacherDoc.exams.length > 0) {
-        ACTIVE_EXAMS = teacherDoc.exams;
-      } else {
-        ACTIVE_EXAMS = (typeof EXAMS !== "undefined") ? [...EXAMS] : [];
-      }
-
-      if (CURRENT_CLASS.isAdmin) {
-        try {
-          const allSnap = await db.collection("teachers").get();
-          CURRENT_CLASS.allClasses = allSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        } catch(e) { CURRENT_CLASS.allClasses = []; }
-      }
-
-      S.cur     = teacherDoc.account || "";
-      S.isAdmin = CURRENT_CLASS.isAdmin;
-      await loadAllData();
-      hideLoader();
-      showMainPage();
-
-    } catch(e) {
-      console.warn("自動登入失敗：", e.message);
-      hideLoader();
-      const lp = document.getElementById("login-page");
-      if (lp) lp.classList.remove("hidden");
-    }
-  });
-})();
+showLoader("載入中...");
 
 // 動態科目與段考（登入後可被 Firestore 覆蓋）
 // 預設值來自 config.js，各班可在 teachers 文件裡自訂
@@ -2450,10 +2367,13 @@ function renderSubjectTrackTable() {
     const first  = filled.length ? vals.find(v=>v!==null) : null;
     const last   = filled.length ? [...vals].reverse().find(v=>v!==null) : null;
     const trend  = (first !== null && last !== null && filled.length >= 2) ? last - first : null;
-    const trendHtml = trend === null ? '<span style="color:#C8BA9E">—</span>'
-      : trend > 5  ? `<span style="color:#2E5A1A;font-weight:700">▲ +${trend.toFixed(0)}</span>`
-      : trend < -5 ? `<span style="color:#8B2222;font-weight:700">▼ ${trend.toFixed(0)}</span>`
-      : `<span style="color:#6B5F4A">≈ ${trend>0?"+":""}${trend.toFixed(0)}</span>`;
+    // 趨勢標籤（文字）
+    const trendLabel = trend === null ? ""
+      : trend > 5  ? `<div style="font-size:10px;color:#2E5A1A;font-weight:700;margin-top:2px">▲ +${trend.toFixed(0)}</div>`
+      : trend < -5 ? `<div style="font-size:10px;color:#8B2222;font-weight:700;margin-top:2px">▼ ${trend.toFixed(0)}</div>`
+      : `<div style="font-size:10px;color:#6B5F4A;margin-top:2px">≈ ${trend>0?"+":""}${trend.toFixed(0)}</div>`;
+    // 趨勢折線（SVG sparkline，寬度稍大）
+    const sparkHtml = makeSpark(vals, 72, 28);
 
     html += `<tr>
       <td class="mono">${String(st.number||"").padStart(2,"0")}</td>
@@ -2463,7 +2383,9 @@ function renderSubjectTrackTable() {
       html += `<td class="score-cell ${cls}">${v !== null ? v.toFixed(0) : "—"}</td>`;
     });
     html += `<td class="score-cell bold" style="color:#1C4A6B">${stAvg !== null ? stAvg.toFixed(1) : "—"}</td>
-      <td class="score-cell">${trendHtml}</td>
+      <td class="score-cell" style="min-width:80px">
+        <div style="display:flex;flex-direction:column;align-items:center">${sparkHtml}${trendLabel}</div>
+      </td>
     </tr>`;
   });
 
