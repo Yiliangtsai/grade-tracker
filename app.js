@@ -252,6 +252,85 @@ function doLogout() {
   showToast("已成功登出 👋");
 }
 
+// ── 自動重新登入（重新整理後不需重新輸入密碼）────────────────
+if (auth) {
+  auth.onAuthStateChanged(async user => {
+    // 如果 main-page 已顯示（正常登入流程），不重複執行
+    const mainPage = document.getElementById("main-page");
+    if (mainPage && !mainPage.classList.contains("hidden")) return;
+
+    if (!user) {
+      // 未登入，顯示登入頁
+      const loginPage = document.getElementById("login-page");
+      if (loginPage) loginPage.classList.remove("hidden");
+      return;
+    }
+
+    // 已登入：從 Firebase 查回帳號資料
+    try {
+      const loginPage = document.getElementById("login-page");
+      if (loginPage) {
+        const hint = document.getElementById("linfo");
+        if (hint) { hint.textContent = "⏳ 自動登入中..."; hint.style.display = "block"; }
+      }
+
+      // 先用 uid 查 teachers
+      let teacherDoc = null;
+      const byUid = await db.collection("teachers").doc(user.uid).get();
+      if (byUid.exists) {
+        teacherDoc = byUid.data();
+      } else {
+        // 用 email 反查帳號
+        const email = user.email || "";
+        const acc = email.includes("@") ? email.split("@")[0] : email;
+        const byAcc = await db.collection("teachers").where("account", "==", acc).limit(1).get();
+        if (!byAcc.empty) teacherDoc = byAcc.docs[0].data();
+      }
+
+      if (!teacherDoc) { auth.signOut(); return; }
+
+      // 還原班級設定
+      PREFIX = teacherDoc.classPrefix + "_";
+      CURRENT_CLASS.prefix      = teacherDoc.classPrefix;
+      CURRENT_CLASS.className   = teacherDoc.className   || CLASS_NAME;
+      CURRENT_CLASS.classYear   = teacherDoc.classYear   || CLASS_YEAR;
+      CURRENT_CLASS.teacherName = teacherDoc.teacherName || "";
+      CURRENT_CLASS.isAdmin     = teacherDoc.isAdmin === true;
+
+      if (Array.isArray(teacherDoc.subjects) && teacherDoc.subjects.length > 0) {
+        ACTIVE_SUBJECTS = teacherDoc.subjects;
+      } else {
+        ACTIVE_SUBJECTS = (typeof SUBJECTS !== "undefined") ? [...SUBJECTS] : [];
+      }
+      if (Array.isArray(teacherDoc.exams) && teacherDoc.exams.length > 0) {
+        ACTIVE_EXAMS = teacherDoc.exams;
+      } else {
+        ACTIVE_EXAMS = (typeof EXAMS !== "undefined") ? [...EXAMS] : [];
+      }
+
+      // 管理者：載入所有班級
+      if (CURRENT_CLASS.isAdmin) {
+        try {
+          const allSnap = await db.collection("teachers").get();
+          CURRENT_CLASS.allClasses = allSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch(e) { CURRENT_CLASS.allClasses = []; }
+      }
+
+      S.cur     = teacherDoc.account || "";
+      S.isAdmin = CURRENT_CLASS.isAdmin;
+      await loadAllData();
+      showMainPage();
+
+    } catch(e) {
+      console.warn("自動登入失敗：", e.message);
+      const loginPage = document.getElementById("login-page");
+      if (loginPage) loginPage.classList.remove("hidden");
+      const hint = document.getElementById("linfo");
+      if (hint) hint.style.display = "none";
+    }
+  });
+}
+
 // ── 顯示主頁面 ────────────────────────────────────────────────
 function showMainPage() {
   hide("login-page"); show("main-page");
@@ -1302,7 +1381,6 @@ function renderInputTable() {
         data-si="${si}" data-subi="${subi}"
         onchange="previewTotal('${st.id}', '${examId}'); markUnsaved()"
         onkeydown="scoreInputKeydown(event, ${si}, ${subi}, '${st.id}', '${examId}')"
-        onpaste="scoreInputPaste(event, ${si}, ${subi}, '${st.id}', '${examId}')"
       ></td>`;
     });
     const br = sc["班排"]||"—", cr = sc["校排"]||"";
@@ -1407,6 +1485,7 @@ function previewTotal(studentId, examId) {
     const tavEl = $("total-avg-row");
     if (tavEl) tavEl.textContent = allTotalsNow.length ? (allTotalsNow.reduce((a,b)=>a+b,0)/allTotalsNow.length).toFixed(1) : "—";
   // 即時重算班排
+  const examId2 = $("input-exam")?.value;
     S.students.forEach(st2 => {
       const sc2 = {};
       ACTIVE_SUBJECTS.forEach(sub => {
@@ -1449,84 +1528,6 @@ function scoreInputKeydown(e, si, subi, studentId, examId) {
   const nextSt = S.students[nextSi];
   const nextSub = ACTIVE_SUBJECTS[nextSubi];
   const nextEl = document.getElementById(`inp_${nextSt.id}_${nextSub.replace(/\s/g,"_")}`);
-  if (nextEl) { nextEl.focus(); nextEl.select(); }
-}
-
-
-// ── 批次貼上成績（從 Excel 複製貼上）────────────────────────
-function scoreInputPaste(e, si, subi, studentId, examId) {
-  const raw = (e.clipboardData || window.clipboardData).getData("text");
-  if (!raw) return;
-
-  // 判斷是否為多格資料（含 Tab 或換行）
-  const hasTab = raw.includes("\t");
-  const hasNewline = raw.includes("\n") || raw.includes("\r");
-  if (!hasTab && !hasNewline) return; // 單格直接走預設貼上
-
-  e.preventDefault();
-
-  // 全形數字轉半形
-  const normalize = str => str.replace(/[０-９]/g, c =>
-    String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30)
-  ).trim();
-
-  // 解析成二維陣列（列 × 欄）
-  const rows = raw.replace(/\r\n/g,"\n").replace(/\r/g,"\n")
-    .trimEnd().split("\n")
-    .map(r => r.split("\t").map(normalize));
-
-  const n = S.students.length;
-  const m = ACTIVE_SUBJECTS.length;
-  let filled = 0, skipped = 0, outOfRange = 0;
-
-  rows.forEach((cols, ri) => {
-    const curSi = si + ri;
-    if (curSi >= n) return; // 超出學生數量
-
-    cols.forEach((val, ci) => {
-      const curSubi = subi + ci;
-      if (curSubi >= m) return; // 超出科目數量
-      if (val === "" || val === null) return; // 空格跳過
-
-      const num = parseFloat(val);
-      const st = S.students[curSi];
-      const sub = ACTIVE_SUBJECTS[curSubi];
-      const el = document.getElementById(`inp_${st.id}_${sub.replace(/\s/g,"_")}`);
-      if (!el) return;
-
-      if (isNaN(num) || num < 0 || num > 100) {
-        el.style.borderColor = "#A83232";
-        el.style.background  = "#FFF4F4";
-        el.title = "分數需介於 0 ~ 100";
-        outOfRange++;
-      } else {
-        el.value = num;
-        el.style.borderColor = "";
-        el.style.background  = "";
-        el.title = "";
-        filled++;
-      }
-    });
-
-    // 更新每位學生的即時總分
-    const st = S.students[curSi];
-    previewTotal(st.id, examId);
-  });
-
-  markUnsaved();
-
-  // 回報結果
-  let msg = `📋 已貼上 ${filled} 格成績`;
-  if (outOfRange > 0) msg += `，${outOfRange} 格超出範圍（已標紅）`;
-  showToast(msg);
-
-  // 移動焦點到貼上區塊的右下角下一格
-  const lastSi  = Math.min(si + rows.length - 1, n - 1);
-  const lastSubi = Math.min(subi + (rows[0]?.length || 1) - 1, m - 1);
-  const nextSi   = Math.min(lastSi + 1, n - 1);
-  const nextSt   = S.students[nextSi];
-  const nextSub  = ACTIVE_SUBJECTS[lastSubi];
-  const nextEl   = document.getElementById(`inp_${nextSt.id}_${nextSub.replace(/\s/g,"_")}`);
   if (nextEl) { nextEl.focus(); nextEl.select(); }
 }
 
