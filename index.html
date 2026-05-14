@@ -321,7 +321,7 @@ input[type="checkbox"]{margin-right:4px}
     padding-top: 4px;
     border-top: 1px solid #E0DAD0;
   }
-  .header,.nav-bar,.no-print,#page-overview,#page-students,#page-input,#page-settings,#page-summary{display:none!important}
+  .header,.nav-bar,.no-print,#page-overview,#page-students,#page-input,#page-settings,#page-summary,#page-track{display:none!important}
   /* 報告列印模式 */
   body:not(.print-analysis):not(.print-analysis-batch) #page-analysis{display:none!important}
   body:not(.print-analysis):not(.print-analysis-batch) #page-report{display:block!important}
@@ -353,53 +353,19 @@ input[type="checkbox"]{margin-right:4px}
   .m-nav,.toast{display:none!important}
 
   /* ── 報告列印優化 ── */
-  .report-paper{
-    box-shadow:none!important;
-    border:none!important;
-    padding:0!important;
-  }
-  .report-header{
-    border-bottom:2pt solid #1C1A14!important;
-    padding-bottom:8pt!important;
-    margin-bottom:14pt!important;
-  }
-  .report-name{font-size:20pt!important}
-  .report-school{font-size:9pt!important}
-  .report-meta{font-size:10pt!important}
-  .report-section-title{
-    font-size:10pt!important;
-    border-bottom:1pt solid #C8BA9E!important;
-    padding-bottom:3pt!important;
-    margin-bottom:8pt!important;
-  }
-
+  .report-paper{ box-shadow:none!important; border:none!important; }
+  .report-header{ border-bottom:2pt solid #1C1A14!important; padding-bottom:8pt!important; margin-bottom:14pt!important; }
+  .report-name{ font-size:20pt!important }
+  .report-school{ font-size:9pt!important }
+  .report-meta{ font-size:10pt!important }
   /* ── 個人分析列印優化 ── */
-  body.print-analysis .card{
-    border:1pt solid #E0DAD0!important;
-    box-shadow:none!important;
-    margin-bottom:8pt!important;
-  }
-  body.print-analysis .stat-card{
-    border:1pt solid #E0DAD0!important;
-    background:#FAF7F0!important;
-  }
-  body.print-analysis canvas{
-    max-height:180pt!important;
-  }
-
+  body.print-analysis .card{ border:1pt solid #E0DAD0!important; box-shadow:none!important; margin-bottom:8pt!important; }
+  body.print-analysis .stat-card{ border:1pt solid #E0DAD0!important; background:#FAF7F0!important; }
+  body.print-analysis canvas{ max-height:180pt!important; }
   /* ── 表格列印 ── */
-  table{border-collapse:collapse!important}
-  th{background:#FAF7F0!important;-webkit-print-color-adjust:exact!important}
-  td,th{border:0.5pt solid #E0DAD0!important;padding:4pt 6pt!important;font-size:9pt!important}
-  .score-input{border:0.5pt solid #C8BA9E!important}
-
-  /* ── 頁首頁尾 ── */
-  .report-paper::before{
-    content: attr(data-class) "　" attr(data-year);
-    display:block;font-size:8pt;color:#9E9890;
-    text-align:right;margin-bottom:4pt;
-    border-bottom:0.5pt solid #E0DAD0;padding-bottom:3pt;
-  }
+  table{ border-collapse:collapse!important }
+  th{ background:#FAF7F0!important; -webkit-print-color-adjust:exact!important }
+  td,th{ border:0.5pt solid #E0DAD0!important; padding:4pt 6pt!important; font-size:9pt!important }
 }
 
 /* ── Student list sparkline & tags ── */
@@ -521,27 +487,6 @@ tfoot td{padding:8px 10px;font-size:12px}
 <!-- ════════════════════════════════════════════════════════
      LOGIN PAGE
 ════════════════════════════════════════════════════════ -->
-<!-- ── 載入動畫 ── -->
-<div id="app-loader" style="
-  position:fixed;inset:0;background:#1C1A14;z-index:9999;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity .4s ease;
-">
-  <div style="font-size:32px;font-weight:900;color:#F5F0E8;letter-spacing:-.02em;margin-bottom:16px">成績追蹤系統</div>
-  <div style="display:flex;gap:8px;margin-bottom:24px">
-    <div style="width:8px;height:8px;border-radius:50%;background:#C8A850;animation:loaderPulse 1.2s ease-in-out infinite"></div>
-    <div style="width:8px;height:8px;border-radius:50%;background:#C8A850;animation:loaderPulse 1.2s ease-in-out .2s infinite"></div>
-    <div style="width:8px;height:8px;border-radius:50%;background:#C8A850;animation:loaderPulse 1.2s ease-in-out .4s infinite"></div>
-  </div>
-  <div id="loader-msg" style="font-size:13px;color:#A89060;letter-spacing:.06em">載入中...</div>
-</div>
-<style>
-@keyframes loaderPulse {
-  0%,100%{opacity:.3;transform:scale(.8)}
-  50%{opacity:1;transform:scale(1.1)}
-}
-</style>
-
 <div id="login-page">
   <div class="login-shell">
     <!-- 左側 -->
@@ -837,7 +782,7 @@ tfoot td{padding:8px 10px;font-size:12px}
           <div id="unsaved-warn" style="display:none;align-items:center;gap:6px;font-size:12px;color:#C4651A;font-weight:600;background:#FDF0E6;border:1px solid #F0C090;border-radius:6px;padding:4px 10px">
             ⚠️ 有未儲存的成績
           </div>
-          <button class="btn btn-sm no-print" onclick="showFailList()" title="顯示本次段考不及格名單" style="background:#FDF0E6;color:#8B4A14;border-color:#E8C49A">📋 不及格名單</button>
+          <button class="btn btn-sm no-print" onclick="showFailList()" style="background:#FDF0E6;color:#8B4A14;border-color:#E8C49A">📋 不及格名單</button>
           <button class="btn btn-danger btn-sm" id="clear-school-rank-btn" onclick="clearAllSchoolRanks()" style="margin-left:auto">🗑️ 清除全班校排資料</button>
           <button class="btn btn-danger btn-sm" id="clear-all-data-btn" onclick="clearAllData()" style="background:#B71C1C;border-color:#B71C1C;color:#FFFFFF;font-weight:700">⚠️ 清除所有成績資料</button>
         </div>
@@ -900,7 +845,10 @@ tfoot td{padding:8px 10px;font-size:12px}
         </div>
       </div>
       </div><!-- /pc-an-wrap -->
-    </div><!-- /page-analysis -->
+    </div>
+
+    <!-- 分析列印容器（隱藏，僅列印時顯示） -->
+    <div id="analysis-print-wrap" style="display:none"></div>
 
     <!-- ── 科目追蹤表 ── -->
     <div id="page-track" class="hidden">
@@ -920,9 +868,6 @@ tfoot td{padding:8px 10px;font-size:12px}
         </div>
       </div>
     </div>
-
-    <!-- 分析列印容器（隱藏，僅列印時顯示） -->
-    <div id="analysis-print-wrap" style="display:none"></div>
     <div id="page-report" class="hidden">
       <div class="section-header mb-16 no-print">
         <div>

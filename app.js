@@ -13,21 +13,63 @@ try {
 }
 
 
-// ── 載入動畫控制 ──────────────────────────────────────────────
-function showLoader(msg) {
-  const el = document.getElementById("app-loader");
-  const msgEl = document.getElementById("loader-msg");
-  if (el) { el.style.opacity = "1"; el.style.display = "flex"; }
-  if (msgEl && msg) msgEl.textContent = msg;
+// ── 自動重新登入（重新整理後不需重新輸入密碼）────────────────
+if (auth) {
+  auth.onAuthStateChanged(async user => {
+    const mainPage = document.getElementById("main-page");
+    if (mainPage && !mainPage.classList.contains("hidden")) return;
+    if (!user) {
+      const lp = document.getElementById("login-page");
+      if (lp) lp.classList.remove("hidden");
+      return;
+    }
+    try {
+      const linfo = document.getElementById("linfo");
+      if (linfo) { linfo.textContent = "⏳ 自動登入中..."; linfo.style.display = "block"; }
+      let teacherDoc = null;
+      const byUid = await db.collection("teachers").doc(user.uid).get();
+      if (byUid.exists) {
+        teacherDoc = byUid.data();
+      } else {
+        const email = user.email || "";
+        const acc = email.includes("@") ? email.split("@")[0] : email;
+        const byAcc = await db.collection("teachers").where("account", "==", acc).limit(1).get();
+        if (!byAcc.empty) teacherDoc = byAcc.docs[0].data();
+      }
+      if (!teacherDoc) { auth.signOut(); return; }
+      PREFIX = teacherDoc.classPrefix + "_";
+      CURRENT_CLASS.prefix      = teacherDoc.classPrefix;
+      CURRENT_CLASS.className   = teacherDoc.className   || CLASS_NAME;
+      CURRENT_CLASS.classYear   = teacherDoc.classYear   || CLASS_YEAR;
+      CURRENT_CLASS.teacherName = teacherDoc.teacherName || "";
+      CURRENT_CLASS.isAdmin     = teacherDoc.isAdmin === true;
+      if (Array.isArray(teacherDoc.subjects) && teacherDoc.subjects.length > 0) {
+        ACTIVE_SUBJECTS = teacherDoc.subjects;
+      } else {
+        ACTIVE_SUBJECTS = (typeof SUBJECTS !== "undefined") ? [...SUBJECTS] : [];
+      }
+      if (Array.isArray(teacherDoc.exams) && teacherDoc.exams.length > 0) {
+        ACTIVE_EXAMS = teacherDoc.exams;
+      } else {
+        ACTIVE_EXAMS = (typeof EXAMS !== "undefined") ? [...EXAMS] : [];
+      }
+      if (CURRENT_CLASS.isAdmin) {
+        try {
+          const allSnap = await db.collection("teachers").get();
+          CURRENT_CLASS.allClasses = allSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch(e) { CURRENT_CLASS.allClasses = []; }
+      }
+      S.cur     = teacherDoc.account || "";
+      S.isAdmin = CURRENT_CLASS.isAdmin;
+      await loadAllData();
+      showMainPage();
+    } catch(e) {
+      console.warn("自動登入失敗：", e.message);
+      const lp = document.getElementById("login-page");
+      if (lp) lp.classList.remove("hidden");
+    }
+  });
 }
-function hideLoader() {
-  const el = document.getElementById("app-loader");
-  if (!el) return;
-  el.style.opacity = "0";
-  setTimeout(() => { el.style.display = "none"; }, 420);
-}
-// 初始：Firebase 載入前先顯示 loader
-showLoader("載入中...");
 
 // 動態科目與段考（登入後可被 Firestore 覆蓋）
 // 預設值來自 config.js，各班可在 teachers 文件裡自訂
@@ -224,7 +266,6 @@ async function doLogin() {
     S.cur     = acc;
     S.isAdmin = CURRENT_CLASS.isAdmin;
     await loadAllData();
-    hideLoader();
     showMainPage();
 
   } catch(err) {
