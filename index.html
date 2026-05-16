@@ -333,6 +333,9 @@ input[type="checkbox"]{margin-right:4px}
   body.print-analysis #analysis-print-wrap{display:none!important}
   body.print-analysis .card{page-break-inside:avoid}
   body.print-analysis .grid2{display:grid!important;grid-template-columns:1fr 1fr!important}
+  body.print-analysis .grid3{display:grid!important;grid-template-columns:1fr 1fr 1fr!important}
+  body.print-analysis .grid4{display:grid!important;grid-template-columns:repeat(4,1fr)!important}
+  body.print-analysis .stat-card{page-break-inside:avoid!important;break-inside:avoid!important}
   /* 全班批次列印模式：analysis-print-wrap 裡是完整的 analysis-content clones */
   body.print-analysis-batch #page-report{display:none!important}
   body.print-analysis-batch #page-analysis{display:block!important}
@@ -340,6 +343,9 @@ input[type="checkbox"]{margin-right:4px}
   body.print-analysis-batch #analysis-print-wrap{display:block!important}
   body.print-analysis-batch #analysis-print-wrap .card{page-break-inside:avoid}
   body.print-analysis-batch #analysis-print-wrap .grid2{display:grid!important;grid-template-columns:1fr 1fr!important}
+  body.print-analysis-batch #analysis-print-wrap .grid3{display:grid!important;grid-template-columns:1fr 1fr 1fr!important}
+  body.print-analysis-batch #analysis-print-wrap .grid4{display:grid!important;grid-template-columns:repeat(4,1fr)!important}
+  body.print-analysis-batch #analysis-print-wrap .stat-card{page-break-inside:avoid!important;break-inside:avoid!important}
   body.print-analysis-batch #analysis-print-wrap .summary-box{page-break-inside:avoid}
   body.print-analysis-batch #analysis-print-wrap .section-header{display:none!important}
   .main{padding:0;max-width:100%}
@@ -926,7 +932,6 @@ tfoot td{padding:8px 10px;font-size:12px}
             <option value="">— 選擇學生 —</option>
           </select>
           <button class="btn btn-primary" onclick="printParentNotice()">🖨 列印通知單</button>
-          <button class="btn" onclick="batchPrintAllNotices()" style="background:#F5F0E8;color:#6B5F4A;border-color:#C8BA9E">🖨 全班批次列印</button>
         </div>
         <div id="parent-notice-wrap"></div>
       </div>
