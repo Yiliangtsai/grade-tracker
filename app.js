@@ -3332,7 +3332,48 @@ function renderReport() {
 function batchPrintAll() {
   if (!S.students.length) { showToast("尚無學生資料"); return; }
   const hideRank = $("report-hide-rank")?.checked || false;
+  const semSummaryMode = $("report-semester-summary")?.checked || false;
   const wrap = $("report-content");
+
+  // ── 學期綜合報告批次列印 ──────────────────────────────────
+  if (semSummaryMode) {
+    const sem = $("report-sem")?.value;
+    if (!sem) { showToast("請先選擇學期"); return; }
+    const validStudents = S.students.filter(st =>
+      ACTIVE_EXAMS.filter(e=>e.semester===sem).some(ex => getFilledCount(getScores(st.id, ex.id)) > 0)
+    );
+    if (!validStudents.length) { showToast("所選學期沒有任何學生有成績資料"); return; }
+
+    // 逐一渲染學期綜合報告，擷取 HTML 後組合列印
+    const origStudentId = S.reportStudentId;
+    let idx = 0;
+    const pages = [];
+
+    // 直接用 buildSemesterSummaryHTML 產生 HTML 字串，不經過 DOM
+    validStudents.forEach((st, i) => {
+      const html = buildSemesterSummaryHTML(st.id, st, sem, hideRank);
+      if (html) pages.push(html);
+    });
+
+    if (!pages.length) { showToast("沒有可列印的資料"); return; }
+    wrap.innerHTML = pages.map((html, i) =>
+      `<div style="${i>0?'page-break-before:always;':''}">${html}</div>`
+    ).join("");
+    const noticeSection = document.getElementById("parent-notice-section");
+    if (noticeSection) noticeSection.style.display = "none";
+    showToast(`⏳ 準備列印 ${pages.length} 位學生的學期綜合報告...`);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        if (noticeSection) noticeSection.style.display = "";
+        S.reportStudentId = origStudentId;
+        if (origStudentId) renderReport();
+      }, 1000);
+    }, 300);
+    return;
+  }
+
+  // ── 一般批次列印（原有邏輯）──────────────────────────────
 
   let allHtml = "";
   S.students.forEach((st, idx) => {
@@ -3455,13 +3496,23 @@ function batchPrintAll() {
 
   if (!allHtml) { showToast("目前沒有任何有成績資料的學生"); return; }
   wrap.innerHTML = allHtml;
-  setTimeout(() => window.print(), 300);
+  const noticeSec = document.getElementById("parent-notice-section");
+  if (noticeSec) noticeSec.style.display = "none";
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => { if (noticeSec) noticeSec.style.display = ""; }, 1000);
+  }, 300);
 }
 
 function printReport() {
   const wrap = $("report-content");
   if (!wrap || !wrap.querySelector(".report-paper")) { showToast("請先選擇學生"); return; }
+  const noticeSection = document.getElementById("parent-notice-section");
+  if (noticeSection) noticeSection.style.display = "none";
   window.print();
+  setTimeout(() => {
+    if (noticeSection) noticeSection.style.display = "";
+  }, 800);
 }
 
 // ── 列印用 SVG 輔助函式 ───────────────────────────────────────
@@ -5378,12 +5429,158 @@ function renderParentNotice() {
   }
 }
 
+
+// ── 全班批次列印家長通知單 ────────────────────────────────────
+function batchPrintAllNotices() {
+  if (!S.students.length) { showToast("尚無學生資料"); return; }
+
+  // 找目前選取的段考（跟隨 report-exam 選單）
+  const examEl = $("report-exam");
+  const examId = examEl?.value;
+  const examName = examEl?.options[examEl.selectedIndex]?.text || "";
+  if (!examId) { showToast("請先在上方選擇段考"); return; }
+
+  // 只列印有成績的學生
+  const validStudents = S.students.filter(st =>
+    getFilledCount(getScores(st.id, examId)) > 0
+  );
+  if (!validStudents.length) { showToast("本次段考尚無任何學生有成績資料"); return; }
+
+  const hideRank = $("report-hide-rank")?.checked || false;
+  const maxScore = getExamMaxScore(examId);
+  const passLine = maxScore * 0.6;
+
+  // 產生每位學生的通知單 HTML
+  const pages = validStudents.map(st => {
+    const sc       = getScores(st.id, examId);
+    const total    = getTotal(sc);
+    const avg      = getAvg(sc);
+    const ex       = ACTIVE_EXAMS.find(e=>e.id===examId);
+
+    // 與上次比較
+    const stIdx    = ACTIVE_EXAMS.findIndex(e=>e.id===examId);
+    const allScores = ACTIVE_EXAMS.map(ex2 => getScores(st.id, ex2.id));
+    const prevIdx  = [...Array(stIdx).keys()].reverse().find(i => getFilledCount(allScores[i]) > 0);
+    const prevTotal = prevIdx !== undefined ? getTotal(allScores[prevIdx]) : null;
+    const diffTotal = (total!==null&&prevTotal!==null) ? total-prevTotal : null;
+
+    // 不及格科目
+    const failSubs = ACTIVE_SUBJECTS.filter(sub => {
+      const v = sc[sub];
+      return v!==undefined && v!=="" && parseFloat(v) < 60;
+    });
+
+    const savedComment = (S.teacherComments[st.id]||{})[examId]||"";
+
+    return `<div style="border:2px solid #1C1A14;border-radius:8px;padding:24px;font-family:'Noto Sans TC',sans-serif;background:#fff;page-break-inside:avoid;break-inside:avoid;page-break-after:always">
+      <div style="text-align:center;border-bottom:2px solid #1C1A14;padding-bottom:12px;margin-bottom:16px">
+        <div style="font-size:11px;color:#6B5F4A;letter-spacing:.1em">${getClassName()} · ${getClassYear()}</div>
+        <div style="font-size:20px;font-weight:900;margin:4px 0">段考成績通知單</div>
+        <div style="font-size:12px;color:#6B5F4A">${ex?.name||examId} · 列印日期：${new Date().toLocaleDateString("zh-TW")}</div>
+      </div>
+      <div style="display:flex;gap:20px;margin-bottom:16px">
+        <div><span style="font-size:12px;color:#6B5F4A">姓名：</span><strong>${st.name}</strong></div>
+        <div><span style="font-size:12px;color:#6B5F4A">座號：</span><strong>${st.number||"—"}</strong></div>
+        ${!hideRank?`<div><span style="font-size:12px;color:#6B5F4A">班排名：</span><strong>${sc["班排"]||"—"}</strong> 名</div>
+        <div><span style="font-size:12px;color:#6B5F4A">校排名：</span><strong>${sc["校排"]||"—"}</strong> 名</div>`:""}
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px">
+        <thead><tr style="background:#F5F0E8">
+          ${ACTIVE_SUBJECTS.map(s=>`<th style="padding:6px 8px;text-align:center;border:1px solid #C8BA9E;font-size:11px">${s}</th>`).join("")}
+          <th style="padding:6px 8px;text-align:center;border:1px solid #C8BA9E;background:#E8E0D0">總分</th>
+          <th style="padding:6px 8px;text-align:center;border:1px solid #C8BA9E;background:#E8E0D0">平均</th>
+        </tr></thead>
+        <tbody><tr>
+          ${ACTIVE_SUBJECTS.map(sub=>{
+            const v=sc[sub]!==undefined&&sc[sub]!==""?parseFloat(sc[sub]):null;
+            const color=v===null?"#C8BA9E":v<60?"#8B2222":"#1C1A14";
+            return `<td style="padding:8px;text-align:center;border:1px solid #C8BA9E;font-family:monospace;font-weight:600;color:${color}">${v!==null?v.toFixed(0):"—"}</td>`;
+          }).join("")}
+          <td style="padding:8px;text-align:center;border:1px solid #C8BA9E;font-weight:700;font-size:15px;background:#F5F0E8">${total!==null?total.toFixed(0):"—"}</td>
+          <td style="padding:8px;text-align:center;border:1px solid #C8BA9E;background:#F5F0E8">${avg!==null?avg.toFixed(1):"—"}</td>
+        </tr></tbody>
+      </table>
+      <div style="display:flex;gap:12px;margin-bottom:16px;font-size:12px">
+        ${diffTotal!==null?`<div style="padding:6px 12px;border-radius:6px;background:${diffTotal>=0?"#EDF4EA":"#FAECEC"};color:${diffTotal>=0?"#2E5A1A":"#8B2222"};font-weight:600">與上次相比：${diffTotal>=0?"▲":"▼"}${Math.abs(diffTotal).toFixed(0)} 分</div>`:""}
+        ${failSubs.length?`<div style="padding:6px 12px;border-radius:6px;background:#FAECEC;color:#8B2222;font-weight:600">⚠️ 不及格：${failSubs.join("、")}</div>`:""}
+      </div>
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:600;color:#6B5F4A;margin-bottom:6px">導師評語</div>
+        <div style="border:1px solid #C8BA9E;border-radius:4px;padding:10px;min-height:60px;font-size:13px">${savedComment||""}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding-top:12px;border-top:1px solid #C8BA9E">
+        <div>家長簽名：_______________</div>
+        <div>日期：_______________</div>
+        <div>導師簽名：_______________</div>
+      </div>
+    </div>`;
+  });
+
+  // 組合並列印，隱藏其他區塊
+  const wrap = $("parent-notice-wrap");
+  const origHtml = wrap.innerHTML;
+  wrap.innerHTML = pages.join("");
+
+  const pageReport = document.getElementById("page-report");
+  const hiddenEls = [];
+  if (pageReport) {
+    Array.from(pageReport.children).forEach(el => {
+      if (!el.contains(wrap)) {
+        el.style.display = "none";
+        hiddenEls.push(el);
+      }
+    });
+    const noticeSection = document.getElementById("parent-notice-section");
+    if (noticeSection) {
+      Array.from(noticeSection.children).forEach(el => {
+        if (el.id !== "parent-notice-wrap") {
+          el.style.display = "none";
+          hiddenEls.push(el);
+        }
+      });
+    }
+  }
+
+  showToast(`⏳ 準備列印 ${pages.length} 位學生的通知單...`);
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      hiddenEls.forEach(el => el.style.display = "");
+      wrap.innerHTML = origHtml;
+    }, 800);
+  }, 300);
+}
+
 function printParentNotice() {
   renderParentNotice();
   setTimeout(() => {
-    document.body.classList.add("print-report");
+    // 隱藏報告卡、頁面標題、通知單的標題和選單列，只保留通知單本體
+    const pageReport = document.getElementById("page-report");
+    const noticeWrap = document.getElementById("parent-notice-wrap");
+    // 把 page-report 內除了 parent-notice-wrap 以外的所有子元素都隱藏
+    const hiddenEls = [];
+    if (pageReport) {
+      Array.from(pageReport.children).forEach(el => {
+        if (!el.contains(noticeWrap)) {
+          el.style.display = "none";
+          hiddenEls.push(el);
+        }
+      });
+      // 隱藏 parent-notice-section 裡面除了 parent-notice-wrap 的其他元素
+      const noticeSection = document.getElementById("parent-notice-section");
+      if (noticeSection) {
+        Array.from(noticeSection.children).forEach(el => {
+          if (el.id !== "parent-notice-wrap") {
+            el.style.display = "none";
+            hiddenEls.push(el);
+          }
+        });
+      }
+    }
     window.print();
-    setTimeout(() => document.body.classList.remove("print-report"), 800);
+    setTimeout(() => {
+      hiddenEls.forEach(el => el.style.display = "");
+    }, 800);
   }, 300);
 }
 
@@ -5846,6 +6043,130 @@ function exportExcel() {
 
 // （診斷工具已移除）
 
+
+
+// ── 學期綜合報告 HTML 產生器（供批次列印用，不寫入 DOM）────────
+function buildSemesterSummaryHTML(studentId, st, sem, hideRank) {
+  const semExams  = ACTIVE_EXAMS.filter(e => e.semester === sem);
+  const semScores = semExams.map(ex => getScores(studentId, ex.id));
+  const semTotals = semScores.map(sc => getTotal(sc));
+  const validPairs = semExams.map((ex,i)=>({ex,sc:semScores[i],t:semTotals[i]})).filter(x=>x.t!==null);
+  if (!validPairs.length) return null;
+
+  const firstT = validPairs[0].t, lastT = validPairs[validPairs.length-1].t;
+  const diff   = validPairs.length >= 2 ? lastT - firstT : null;
+  const maxT   = Math.max(...validPairs.map(p=>p.t));
+  const minT   = Math.min(...validPairs.map(p=>p.t));
+  const avgT   = validPairs.map(p=>p.t).reduce((a,b)=>a+b,0)/validPairs.length;
+
+  const subAvgs = ACTIVE_SUBJECTS.map(sub => {
+    const vals = semScores.map(sc=>sc[sub]!==undefined&&sc[sub]!==""?parseFloat(sc[sub]):null).filter(v=>v!==null);
+    const clsVals = semExams.flatMap(ex=>S.students.map(st2=>{const v=getScores(st2.id,ex.id)[sub];return v!==undefined&&v!==""?parseFloat(v):null;})).filter(v=>v!==null);
+    const myAvg  = vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
+    const clsAvg = clsVals.length?clsVals.reduce((a,b)=>a+b,0)/clsVals.length:null;
+    return { sub, myAvg, clsAvg, count: vals.length };
+  }).filter(s=>s.myAvg!==null);
+
+  const bestSub  = subAvgs.length?subAvgs.reduce((a,b)=>a.myAvg>b.myAvg?a:b):null;
+  const failSubs = subAvgs.filter(s=>s.myAvg<60);
+  const aboveAvgSubs = subAvgs.filter(s=>s.clsAvg!==null&&s.myAvg>=s.clsAvg+5);
+  const latestRank = validPairs[validPairs.length-1].sc["班排"]||null;
+  const latestSchoolRank = validPairs[validPairs.length-1].sc["校排"]||null;
+
+  const diffHtml = diff===null?"":diff>0
+    ? `<span style="color:#2E5A1A;font-weight:700">▲${diff.toFixed(0)} 分進步</span>`
+    : diff<0?`<span style="color:#8B2222;font-weight:700">▼${Math.abs(diff).toFixed(0)} 分退步</span>`
+    : `<span style="color:#6B5F4A">持平</span>`;
+
+  let compareRows = "";
+  semExams.forEach((ex, i) => {
+    const sc = semScores[i], t = semTotals[i];
+    const prevT = i>0?semTotals[i-1]:null;
+    const td = (t!==null&&prevT!==null)?t-prevT:null;
+    const tdHtml = td===null?"":td>0?`<span style="color:#2E5A1A;font-size:11px"> ▲${td.toFixed(0)}</span>`:`<span style="color:#8B2222;font-size:11px"> ▼${Math.abs(td).toFixed(0)}</span>`;
+    if (getFilledCount(sc)===0) return;
+    compareRows += `<tr><td style="font-size:12px;font-weight:600;white-space:nowrap">${ex.name}</td>`;
+    ACTIVE_SUBJECTS.forEach(sub => {
+      const v = sc[sub]!==undefined&&sc[sub]!==""?parseFloat(sc[sub]):null;
+      const c = v===null?"#C8BA9E":v>=80?"#2E5A1A":v<60?"#8B2222":"#1C1A14";
+      compareRows += `<td style="text-align:center;font-family:monospace;font-size:12px;font-weight:600;color:${c}">${v!==null?v.toFixed(0):"—"}</td>`;
+    });
+    const tc = t===null?"#C8BA9E":t>=ACTIVE_SUBJECTS.length*80?"#2E5A1A":t<ACTIVE_SUBJECTS.length*60?"#8B2222":"#2D5F8A";
+    compareRows += `<td style="text-align:center;font-family:monospace;font-weight:700;font-size:13px;color:${tc}">${t!==null?t.toFixed(0):"—"}${tdHtml}</td>`;
+    if (!hideRank) compareRows += `<td style="text-align:center;font-size:12px;color:#6B5F4A">${sc["班排"]||"—"}</td><td style="text-align:center;font-size:12px;color:#6B4FA0">${sc["校排"]||"—"}</td>`;
+    compareRows += `</tr>`;
+  });
+
+  let avgRow = `<tr style="background:#FAF7F0;border-top:2px solid #C8BA9E"><td style="font-size:11px;font-weight:700;color:#6B5F4A">學期平均</td>`;
+  ACTIVE_SUBJECTS.forEach(sub => {
+    const a = subAvgs.find(s=>s.sub===sub);
+    const c = !a?"#C8BA9E":a.myAvg>=80?"#2E5A1A":a.myAvg<60?"#8B2222":"#1C1A14";
+    avgRow += `<td style="text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:${c}">${a?a.myAvg.toFixed(1):"—"}</td>`;
+  });
+  avgRow += `<td style="text-align:center;font-family:monospace;font-weight:700;font-size:13px;color:#2D5F8A">${avgT.toFixed(1)}</td>`;
+  if (!hideRank) avgRow += `<td colspan="2"></td>`;
+  avgRow += `</tr>`;
+
+  const savedComment = (S.teacherComments[studentId]||{})[sem+"_summary"]||"";
+
+  return `<div class="report-paper">
+    <div class="report-header">
+      <div>
+        <div class="report-school">${getClassName()} ${sem}學期綜合報告 · ${getClassYear()}</div>
+        <div class="report-name">${st.name}</div>
+        <div class="report-meta">座號：${st.number||"—"} ／ 列印日期：${new Date().toLocaleDateString("zh-TW")}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:32px;font-weight:900;font-family:monospace;color:#1C1A14;line-height:1">${avgT.toFixed(0)}</div>
+        <div style="font-size:11px;color:#8B7355">學期平均總分</div>
+      </div>
+    </div>
+    <div style="background:linear-gradient(135deg,#1C3A5E,#2D5F8A);color:#EAF1F8;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:12px;line-height:2">
+      📈 ${sem}學期共 ${validPairs.length} 次段考　${diff!==null?diffHtml+"（"+firstT.toFixed(0)+"→"+lastT.toFixed(0)+"分）":""}
+      　　最高 <strong>${maxT.toFixed(0)}</strong> 分　最低 <strong>${minT.toFixed(0)}</strong> 分
+      ${bestSub?`<br>💪 最強科目：<strong>${bestSub.sub}</strong>（學期均 ${bestSub.myAvg.toFixed(1)} 分）`:""}
+      ${failSubs.length?`<br>⚠️ 學期平均不及格：<strong>${failSubs.map(s=>s.sub+"("+s.myAvg.toFixed(1)+")").join("、")}</strong>`:""}
+      ${aboveAvgSubs.length?`<br>📊 高於班平均：<strong>${aboveAvgSubs.map(s=>s.sub).join("、")}</strong>`:""}
+      ${!hideRank&&latestRank?`<br>🏅 最新班排：<strong>${latestRank}</strong> 名${latestSchoolRank?" ／ 校排 <strong>"+latestSchoolRank+"</strong> 名":""}`:``}
+    </div>
+    <div class="report-section" style="margin-bottom:14px">
+      <div class="report-exam-title">📊 ${sem}學期三次段考成績對比</div>
+      <div class="table-wrap"><table class="report-table">
+        <thead><tr>
+          <th>段考</th>
+          ${ACTIVE_SUBJECTS.map(s=>`<th style="text-align:center;white-space:nowrap">${s}</th>`).join("")}
+          <th style="text-align:center">總分</th>
+          ${!hideRank?`<th style="text-align:center">班排</th><th style="text-align:center">校排</th>`:""}
+        </tr></thead>
+        <tbody>${compareRows}${avgRow}</tbody>
+      </table></div>
+    </div>
+    <div class="report-section" style="margin-bottom:14px">
+      <div class="report-exam-title">📐 各科學期平均 vs 班級平均</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${subAvgs.map(({sub,myAvg,clsAvg})=>{
+          const diff2=clsAvg!==null?myAvg-clsAvg:null;
+          const bc=myAvg>=80?"#2E5A1A":myAvg<60?"#8B2222":"#2D5F8A";
+          const dc=diff2===null?"#9E9890":diff2>=0?"#2E5A1A":"#8B2222";
+          return `<div style="background:#FAF7F0;border:1px solid #E0DAD0;border-radius:6px;padding:8px 10px">
+            <div style="font-size:11px;font-weight:700;color:#6B5F4A;margin-bottom:4px">${sub}</div>
+            <div style="font-family:monospace;font-size:18px;font-weight:900;color:${bc}">${myAvg.toFixed(1)}</div>
+            ${clsAvg!==null?`<div style="font-size:10px;color:${dc}">${diff2>=0?"▲":"▼"}${Math.abs(diff2).toFixed(1)} vs 班平均(${clsAvg.toFixed(1)})</div>`:""}
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+    <div class="report-comment">
+      <div class="report-comment-title">學期綜合評語</div>
+      <div class="report-comment-box">${savedComment||"&nbsp;"}</div>
+    </div>
+    <div class="report-sign">
+      <div>導師簽名：_______________</div>
+      <div>家長簽名：_______________</div>
+      <div>日期：_______________</div>
+    </div>
+  </div>`;
+}
 
 // ── 學期綜合報告 ──────────────────────────────────────────────
 function renderSemesterSummaryReport(studentId, st, sem, hideRank) {
