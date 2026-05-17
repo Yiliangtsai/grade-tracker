@@ -27,7 +27,7 @@
    RESET & BASE
 ═══════════════════════════════════════════════════════════ */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Noto Sans TC',system-ui,sans-serif;background:#F5F0E8;min-height:100vh;font-size:14px;color:#1C1A14}
+body{font-family:'Noto Sans TC',system-ui,sans-serif;background:#F5F0E8;min-height:100vh;font-size:16px;color:#1C1A14}
 .hidden{display:none!important}
 
 /* ═══════════════════════════════════════════════════════════
@@ -333,9 +333,6 @@ input[type="checkbox"]{margin-right:4px}
   body.print-analysis #analysis-print-wrap{display:none!important}
   body.print-analysis .card{page-break-inside:avoid}
   body.print-analysis .grid2{display:grid!important;grid-template-columns:1fr 1fr!important}
-  body.print-analysis .grid3{display:grid!important;grid-template-columns:1fr 1fr 1fr!important}
-  body.print-analysis .grid4{display:grid!important;grid-template-columns:repeat(4,1fr)!important}
-  body.print-analysis .stat-card{page-break-inside:avoid!important;break-inside:avoid!important}
   /* 全班批次列印模式：analysis-print-wrap 裡是完整的 analysis-content clones */
   body.print-analysis-batch #page-report{display:none!important}
   body.print-analysis-batch #page-analysis{display:block!important}
@@ -343,9 +340,6 @@ input[type="checkbox"]{margin-right:4px}
   body.print-analysis-batch #analysis-print-wrap{display:block!important}
   body.print-analysis-batch #analysis-print-wrap .card{page-break-inside:avoid}
   body.print-analysis-batch #analysis-print-wrap .grid2{display:grid!important;grid-template-columns:1fr 1fr!important}
-  body.print-analysis-batch #analysis-print-wrap .grid3{display:grid!important;grid-template-columns:1fr 1fr 1fr!important}
-  body.print-analysis-batch #analysis-print-wrap .grid4{display:grid!important;grid-template-columns:repeat(4,1fr)!important}
-  body.print-analysis-batch #analysis-print-wrap .stat-card{page-break-inside:avoid!important;break-inside:avoid!important}
   body.print-analysis-batch #analysis-print-wrap .summary-box{page-break-inside:avoid}
   body.print-analysis-batch #analysis-print-wrap .section-header{display:none!important}
   .main{padding:0;max-width:100%}
